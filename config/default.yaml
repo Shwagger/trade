@@ -1,0 +1,63 @@
+instrument:
+  symbol: EURUSD
+  pip_size: 0.0001
+  contract_size: 100000.0
+  min_lot: 0.01
+  lot_step: 0.01
+  max_lot: 50.0
+  pip_value_per_lot: 10.0
+costs:
+  spread_pips: 1.0
+  slippage_pips: 0.2
+  commission_per_lot_roundturn: 7.0
+  swap_pips_per_night_long: -0.3
+  swap_pips_per_night_short: -0.1
+  max_tradable_spread_pips: 2.5
+labels:
+  tp_atr_mult: 3.0
+  sl_atr_mult: 1.5
+  max_holding_bars: 48
+  atr_period: 14
+model:
+  ensemble_weights:
+    gbm: 0.5
+    forest: 0.3
+    linear: 0.2
+  calibration_fraction: 0.2
+  min_train_samples: 400
+  random_state: 7
+signal:
+  ml_weight: 0.65
+  technical_weight: 0.35
+  min_score: 0.12
+  min_confidence: 0.4
+  require_agreement: true
+risk:
+  risk_per_trade: 0.005
+  min_reward_risk: 2.0
+  sl_atr_mult: 1.5
+  tp_atr_mult: 3.0
+  min_net_reward_risk: 1.5
+  max_open_positions: 1
+  max_daily_loss: 0.02
+  max_total_drawdown: 0.2
+  max_consecutive_losses: 4
+  cooldown_bars_after_streak: 12
+  allowed_sessions:
+  - london
+  - newyork
+  - overlap
+  min_atr_pips: 5.0
+  max_atr_pips: 60.0
+data:
+  source: synthetic
+  path: ''
+  timeframe: 1h
+  bars: 30000
+  seed: 42
+walk_forward:
+  train_bars: 6000
+  test_bars: 1500
+  step_bars: 1500
+  embargo_bars: 96
+initial_equity: 10000.0
