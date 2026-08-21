@@ -28,7 +28,13 @@ from .metrics import (
     format_metrics,
     infer_bars_per_year,
 )
-from .pipeline import build_dataset, fit_model, make_signals, run_backtest
+from .pipeline import (
+    build_dataset,
+    explain_empty_dataset,
+    fit_model,
+    make_signals,
+    run_backtest,
+)
 from .report import render, save, verdict
 from .risk import RiskManager
 from .signal import decide
@@ -57,6 +63,10 @@ def _load_config(args: argparse.Namespace) -> Config:
         cfg.risk.risk_per_trade = args.risk
     if args.equity is not None:
         cfg.initial_equity = args.equity
+    for name in ("train_bars", "test_bars", "step_bars"):
+        value = getattr(args, name, None)
+        if value:
+            setattr(cfg.walk_forward, name, value)
     return cfg
 
 
@@ -85,6 +95,36 @@ def cmd_data(args: argparse.Namespace) -> int:
     gaps = bars.index.to_series().diff().value_counts().head(3)
     print(f"most common bar spacing:\n{gaps.to_string()}")
     return 0
+
+
+def _describe_dataset(ds, cfg: Config) -> bool:
+    """Report what the feed produced. Returns False when it is unusable."""
+    trainable = ds.trainable()
+    print(f"features: {len(ds.feature_names)}   labelled rows: {len(trainable):,}")
+    if ds.dropped_features:
+        print(
+            f"          {len(ds.dropped_features)} feature(s) unavailable on this feed "
+            f"and excluded: {', '.join(ds.dropped_features)}"
+        )
+    if len(trainable) >= cfg.model.min_train_samples:
+        return True
+
+    print(
+        f"\nnot enough usable rows: {len(trainable):,} labelled, "
+        f"{cfg.model.min_train_samples} needed.",
+        file=sys.stderr,
+    )
+    print(explain_empty_dataset(ds), file=sys.stderr)
+    print(
+        "\nThe usual causes, in order of likelihood:\n"
+        "  1. too little history - features need ~300 bars of warm-up and labels\n"
+        f"     need {cfg.labels.max_holding_bars} bars of future to resolve\n"
+        "  2. a column the feed cannot fill (listed above)\n"
+        "  3. gaps or duplicated timestamps in the CSV\n"
+        "Inspect the file with:  python -m forexai data --source csv --path <file>",
+        file=sys.stderr,
+    )
+    return False
 
 
 def cmd_fetch(args: argparse.Namespace) -> int:
@@ -244,14 +284,34 @@ def cmd_walkforward(args: argparse.Namespace) -> int:
     cfg = _load_config(args)
     bars = _load_data(cfg)
     ds = build_dataset(bars, cfg)
-    print(f"features: {len(ds.feature_names)}   labelled rows: {len(ds.trainable()):,}")
+    if not _describe_dataset(ds, cfg):
+        return 1
     print("\nwalk-forward folds:")
     result = walk_forward(ds, cfg)
     if not result.folds:
+        wf = cfg.walk_forward
+        embargo = max(wf.embargo_bars, cfg.labels.max_holding_bars)
+        needed = wf.train_bars + embargo + wf.test_bars
+        have = len(ds.features)
         print(
-            "no fold could be built - reduce walk_forward.train_bars/test_bars "
-            "or supply more data."
+            f"\nno fold could be built: one fold needs {needed:,} bars "
+            f"(train {wf.train_bars:,} + embargo {embargo} + test {wf.test_bars:,}) "
+            f"and this data has {have:,}.",
+            file=sys.stderr,
         )
+        if have > 2_000:
+            train = int(have * 0.55)
+            test = int(have * 0.15)
+            print(
+                "\nFor this much data, try:\n"
+                f"  python -m forexai walkforward --source {cfg.data.source} "
+                f"--path {cfg.data.path} \\\n"
+                f"      --train-bars {train} --test-bars {test} --step-bars {test}",
+                file=sys.stderr,
+            )
+        else:
+            print("\nGet more history:  python -m forexai fetch --timeframe 1d "
+                  "--provider stooq", file=sys.stderr)
         return 1
     print()
     print(render(result, cfg, title=f"FOREX AI v{__version__}"))
@@ -266,6 +326,8 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     cfg = _load_config(args)
     bars = _load_data(cfg)
     ds = build_dataset(bars, cfg)
+    if not _describe_dataset(ds, cfg):
+        return 1
 
     index = ds.features.index
     split = int(len(index) * (1.0 - args.test_fraction))
@@ -301,6 +363,8 @@ def cmd_train(args: argparse.Namespace) -> int:
     cfg = _load_config(args)
     bars = _load_data(cfg)
     ds = build_dataset(bars, cfg)
+    if not _describe_dataset(ds, cfg):
+        return 1
     train_idx = ds.trainable()
     model = fit_model(ds, train_idx, cfg)
 
@@ -531,6 +595,9 @@ def build_parser() -> argparse.ArgumentParser:
         "walkforward", aliases=["wf"], help="rolling out-of-sample validation", parents=[common]
     )
     wf.add_argument("--no-save", action="store_true", help="do not write artefacts to runs/")
+    wf.add_argument("--train-bars", type=int, help="bars per training window")
+    wf.add_argument("--test-bars", type=int, help="bars traded forward per fold")
+    wf.add_argument("--step-bars", type=int, help="bars between folds")
     wf.set_defaults(func=cmd_walkforward)
 
     bt = sub.add_parser("backtest", help="single train/test split backtest", parents=[common])

@@ -9,8 +9,9 @@ Two entry points:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Optional
+import warnings
+from dataclasses import dataclass, field
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
@@ -32,6 +33,8 @@ class Dataset:
     labels: pd.DataFrame
     technical: pd.DataFrame
     feature_names: list
+    # Columns that were unusable on this feed, kept for reporting.
+    dropped_features: List[str] = field(default_factory=list)
     # Row masks are pure functions of the frames above and are asked for once
     # per bar by the live monitor, so they are computed once and kept.
     _trainable: Optional[pd.Index] = None
@@ -62,13 +65,50 @@ def build_dataset(bars: pd.DataFrame, cfg: Config) -> Dataset:
     features = build_features(bars, atr_period=cfg.labels.atr_period)
     labels = triple_barrier_labels(bars, features["atr"], cfg.labels)
     technical = technical_score(features)
+
+    # A model row needs every feature present, so a single column that is NaN
+    # throughout silently reduces the dataset to nothing. Drop such columns and
+    # say so, rather than training on zero rows.
+    names = feature_columns(features)
+    dropped = [name for name in names if features[name].isna().all()]
+    if dropped:
+        warnings.warn(
+            f"dropping {len(dropped)} feature(s) this data feed cannot support: "
+            f"{', '.join(dropped)}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        names = [name for name in names if name not in dropped]
+
     return Dataset(
         bars=bars,
         features=features,
         labels=labels,
         technical=technical,
-        feature_names=feature_columns(features),
+        feature_names=names,
+        dropped_features=dropped,
     )
+
+
+def explain_empty_dataset(ds: Dataset, top: int = 6) -> str:
+    """Say which columns are costing rows, instead of just reporting zero."""
+    usable = ds.features[ds.feature_names]
+    if usable.empty or not len(ds.feature_names):
+        return "  no usable feature columns at all - check the data file."
+
+    share = (usable.isna().mean() * 100.0).sort_values(ascending=False)
+    lines = ["  columns responsible for dropped rows (share of bars that are NaN):"]
+    for name, pct in share.head(top).items():
+        if pct <= 0:
+            break
+        lines.append(f"    {name:<16} {pct:6.1f} %")
+    if len(lines) == 1:
+        lines.append("    none - the rows are missing labels, not features.")
+        lines.append(
+            "    Every bar needs a resolved outcome, which needs "
+            f"{ds.labels['label'].isna().sum():,} more bars of history after it."
+        )
+    return "\n".join(lines)
 
 
 def fit_model(ds: Dataset, train_index: pd.Index, cfg: Config) -> MLEnsemble:

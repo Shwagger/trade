@@ -42,7 +42,7 @@ bash scripts/setup_mac.sh
 ```
 
 C'est tout. Le script trouve ton Python, crée l'environnement, installe les
-dépendances, lance les 158 tests, télécharge de vraies barres EURUSD, fait
+dépendances, lance les 167 tests, télécharge de vraies barres EURUSD, fait
 tourner la validation, entraîne le modèle et te montre une alerte réelle.
 
 Deux pièges macOS qu'il gère à ta place :
@@ -97,8 +97,17 @@ un edge. Pour du sérieux, il faut de vraies barres (section suivante).
 python -m forexai fetch --symbol EURUSD --timeframe 1h --years 2
 ```
 
-Yahoo, sans clé d'API, sans dépendance en plus. ~12 000 barres H1 (Yahoo plafonne
-l'intraday à 730 jours). Pour des décennies d'historique :
+Yahoo, sans clé d'API, sans dépendance en plus. ~12 300 barres H1 (Yahoo plafonne
+l'intraday à 730 jours), ce qui donne **4 folds** de walk-forward avec la config
+par défaut. C'est peu mais exploitable.
+
+> **Le forex spot n'a pas de volume.** Il n'y a pas de bourse centrale, donc rien
+> à compter : Yahoo renvoie une colonne de zéros. C'est normal, pas une panne du
+> flux. Le système le détecte et neutralise ses deux features de volume au lieu
+> de les laisser passer en NaN — ce qui, avant correction, vidait le jeu de
+> données entier sans le dire.
+
+Pour des décennies d'historique :
 
 ```bash
 python -m forexai fetch --symbol EURUSD --timeframe 1d --provider stooq
@@ -370,6 +379,10 @@ le dépôt — pour que le run de 15h05 sache ce qu'a fait celui de 14h05.
 
 ### Mise en route (une fois, 2 minutes)
 
+> Attention : **ce n'est pas un « self-hosted runner ».** Cette page-là ferait
+> tourner les jobs sur ton propre Mac, exactement ce qu'on cherche à éviter. Tu
+> veux les *secrets*, pas les *runners*.
+
 1. Sur GitHub, va dans ton dépôt → **Settings** → **Secrets and variables** →
    **Actions** → **New repository secret**
 2. Crée `TELEGRAM_BOT_TOKEN` — colle ton token
@@ -484,7 +497,7 @@ un danger structurel, il ne peut jamais en créer un ni l'agrandir. Ollama
 python -m pytest tests/ -q
 ```
 
-158 tests. Les plus importants :
+167 tests. Les plus importants :
 
 * `test_no_lookahead.py` — tronquer ou corrompre le futur ne doit changer
   **aucune** valeur de feature passée. Si ce test tombe, tout le reste est un
@@ -505,6 +518,10 @@ python -m pytest tests/ -q
   de gap), ce qui a imposé la version adaptée au FX.
 * `test_notify.py` — l'alerte contient bien le stop et la taille, et un Telegram
   injoignable ne fait jamais tomber le monitor.
+* `test_feed_robustness.py` — un flux sans volume produit quand même un jeu de
+  données, et aucune colonne morte ne peut vider l'entraînement en silence.
+  Écrit après que Yahoo ait réduit 12 319 vraies barres à zéro ligne
+  exploitable.
 
 ---
 

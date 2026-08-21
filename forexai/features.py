@@ -39,6 +39,17 @@ def session_of(hour: int) -> str:
     return "asia"
 
 
+def has_volume(volume: pd.Series) -> bool:
+    """True when the feed actually carries volume information.
+
+    A constant column - all zeros, or a broker's placeholder - carries none.
+    """
+    clean = volume.dropna()
+    if clean.empty or float(clean.abs().sum()) == 0.0:
+        return False
+    return float(clean.std(ddof=0)) > 0.0
+
+
 def build_features(df: pd.DataFrame, atr_period: int = 14) -> pd.DataFrame:
     """Return a feature matrix aligned to ``df`` (same index, NaN warm-up)."""
     close, high, low, open_, volume = (
@@ -120,8 +131,16 @@ def build_features(df: pd.DataFrame, atr_period: int = 14) -> pd.DataFrame:
     out["streak"] = (streak * direction).clip(-6, 6)
 
     # --- flow ------------------------------------------------------------
-    out["vol_z"] = ind.zscore(volume, 96)
-    out["vol_trend"] = volume / ind.sma(volume, 24).replace(0.0, np.nan)
+    # Spot FX has no central exchange, so there is no true volume. Free feeds
+    # (Yahoo among them) return a column of zeros. That is a feed without
+    # volume, not a broken market: derive nothing from it rather than emitting
+    # NaN on every row, which would empty the training set entirely.
+    if has_volume(volume):
+        out["vol_z"] = ind.zscore(volume, 96)
+        out["vol_trend"] = volume / ind.sma(volume, 24).replace(0.0, np.nan)
+    else:
+        out["vol_z"] = 0.0          # neutral z-score
+        out["vol_trend"] = 1.0      # neutral ratio
 
     # --- clock -----------------------------------------------------------
     hour = df.index.hour.to_numpy()
