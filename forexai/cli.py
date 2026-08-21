@@ -205,7 +205,7 @@ def cmd_monitor(args: argparse.Namespace) -> int:
     import time
 
     from .monitor import Monitor
-    from .notify import build_notifier
+    from .notify import build_notifier, format_test
 
     blob = _load_model()
     if blob is None:
@@ -218,12 +218,41 @@ def cmd_monitor(args: argparse.Namespace) -> int:
             if attr == "path":
                 cfg.data.source = "csv"
 
+    notifier = build_notifier(args.telegram)
+    if args.test_alert:
+        # A test of the Telegram path must not be satisfied by the console
+        # fallback: printing to a log proves nothing about a phone.
+        from .notify import TelegramNotifier
+
+        telegram = TelegramNotifier.from_env()
+        if not telegram.enabled:
+            print(
+                f"cannot test: {telegram.describe()}\n"
+                "In GitHub Actions these come from repository secrets; "
+                "locally, export them in your shell.",
+                file=sys.stderr,
+            )
+            return 1
+        message = format_test(cfg.instrument.symbol, cfg.data.timeframe)
+        if telegram.send(message):
+            print("test alert delivered - check your phone")
+            return 0
+        print(
+            "test alert NOT delivered.\n"
+            "  - is TELEGRAM_BOT_TOKEN the current token? (BotFather /revoke "
+            "invalidates the old one)\n"
+            "  - is TELEGRAM_CHAT_ID your chat id, and did you message the bot "
+            "at least once?",
+            file=sys.stderr,
+        )
+        return 1
+
     backtest_expectancy = _latest_bootstrap()
     monitor = Monitor(
         cfg, blob["model"], workdir=args.workdir,
         retrain_every=args.retrain_every,
         backtest_expectancy=backtest_expectancy,
-        notifier=build_notifier(args.telegram),
+        notifier=notifier,
     )
     if backtest_expectancy:
         print(
@@ -640,6 +669,8 @@ def build_parser() -> argparse.ArgumentParser:
     mo.add_argument("--telegram", action="store_true",
                     help="send actionable alerts to Telegram "
                          "(needs TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)")
+    mo.add_argument("--test-alert", action="store_true",
+                    help="send one test message and exit, touching no state")
     mo.set_defaults(func=cmd_monitor)
 
     pp = sub.add_parser("paper", help="dry-run replay of recent bars", parents=[common])

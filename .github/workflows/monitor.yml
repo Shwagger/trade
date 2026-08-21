@@ -27,6 +27,10 @@ on:
         description: "force a fresh model"
         type: boolean
         default: false
+      test_alert:
+        description: "just send a Telegram test message and stop"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -69,12 +73,25 @@ jobs:
           # that the hourly run stays cheap.
           key: model-${{ env.SYMBOL }}-${{ steps.week.outputs.value }}-${{ hashFiles('requirements.txt') }}
 
+      - name: telegram test message
+        if: ${{ github.event.inputs.test_alert == 'true' }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python -m forexai monitor --test-alert --symbol "$SYMBOL"
+
+      - name: stop here when only testing the alert
+        if: ${{ github.event.inputs.test_alert == 'true' }}
+        run: echo "test alert requested - not touching the watcher's state"
+
       - name: download the latest bars
+        if: ${{ github.event.inputs.test_alert != 'true' }}
         run: |
           python -m forexai fetch \
             --symbol "$SYMBOL" --timeframe "$TIMEFRAME" --years 2 --out "$DATA"
 
       - name: train if there is no model for this week
+        if: ${{ github.event.inputs.test_alert != 'true' }}
         run: |
           if [ ! -f models/latest.joblib ] || [ "${{ github.event.inputs.retrain }}" = "true" ]; then
             echo "training a fresh model"
@@ -84,6 +101,7 @@ jobs:
           fi
 
       - name: watch the market
+        if: ${{ github.event.inputs.test_alert != 'true' }}
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -94,6 +112,7 @@ jobs:
             --source csv --path "$DATA"
 
       - name: keep the paper account's memory
+        if: ${{ github.event.inputs.test_alert != 'true' }}
         run: |
           git config user.name "forexai-monitor"
           git config user.email "monitor@users.noreply.github.com"

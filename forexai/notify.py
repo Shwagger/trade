@@ -117,6 +117,21 @@ def format_start(symbol: str, timeframe: str, bar_time, equity: float) -> str:
     )
 
 
+def format_test(symbol: str, timeframe: str) -> str:
+    """On-demand proof that the credentials and the network path work.
+
+    The start message only fires on a fresh account, so once a watcher has
+    state there is otherwise no way to check the wiring without corrupting it.
+    """
+    return (
+        "TEST ALERT\n"
+        f"  watcher: {symbol} {timeframe}\n"
+        "\n"
+        "If you are reading this, the token and chat id are correct and the\n"
+        "alerts will reach you. Nothing was traded and no state was changed."
+    )
+
+
 def format_fill(symbol: str, trade_direction: int, entry: float, lots: float,
                 stop_loss: float, take_profit: float) -> str:
     return (

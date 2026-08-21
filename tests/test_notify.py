@@ -190,3 +190,29 @@ def test_a_cold_start_sends_exactly_one_confirmation(tmp_path):
     # A second pass with nothing new must not repeat the announcement.
     monitor.step(bars)
     assert len(recorder.messages) == 1
+
+
+def test_test_alert_message_is_unambiguous():
+    from forexai.notify import format_test
+
+    text = format_test("EURUSD", "1h")
+    assert "TEST ALERT" in text
+    assert "EURUSD" in text
+    assert "no state was changed" in text
+
+
+def test_console_fallback_cannot_stand_in_for_a_telegram_test(monkeypatch, capsys):
+    """Printing to a log proves nothing about whether a phone rang."""
+    from forexai.cli import main
+
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    monkeypatch.setattr("forexai.cli._load_model", lambda: None)
+
+    assert main(["monitor", "--test-alert"]) == 1        # no model, refuses early
+    monkeypatch.setattr(
+        "forexai.cli._load_model",
+        lambda: {"model": None, "config": __import__("forexai.config", fromlist=["Config"]).Config().to_dict()},
+    )
+    assert main(["monitor", "--test-alert"]) == 1        # no credentials, refuses
+    assert "cannot test" in capsys.readouterr().err

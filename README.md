@@ -42,7 +42,7 @@ bash scripts/setup_mac.sh
 ```
 
 C'est tout. Le script trouve ton Python, crée l'environnement, installe les
-dépendances, lance les 167 tests, télécharge de vraies barres EURUSD, fait
+dépendances, lance les 171 tests, télécharge de vraies barres EURUSD, fait
 tourner la validation, entraîne le modèle et te montre une alerte réelle.
 
 Deux pièges macOS qu'il gère à ta place :
@@ -387,8 +387,15 @@ le dépôt — pour que le run de 15h05 sache ce qu'a fait celui de 14h05.
    **Actions** → **New repository secret**
 2. Crée `TELEGRAM_BOT_TOKEN` — colle ton token
 3. Crée `TELEGRAM_CHAT_ID` — colle ton chat id
-4. Onglet **Actions** → **market monitor** → **Run workflow** pour le tester
-   tout de suite
+4. Onglet **Actions** (tout en haut, à côté de *Code*) → **market monitor**
+   dans la colonne de gauche → bouton **Run workflow** à droite
+5. Pour vérifier que Telegram est bien branché, coche **test_alert** avant de
+   lancer : il envoie un message de test et s'arrête, sans rien toucher à
+   l'état du bot
+
+Le tout premier vrai run ne t'enverra rien d'autre qu'un « MONITOR STARTED » :
+il s'ancre sur la dernière bougie fermée et attend un vrai setup. Le silence
+qui suit est normal — la plupart des bougies sont des WAIT.
 
 Ensuite ça tourne tout seul, à 5 minutes de chaque heure — assez tard pour que
 la bougie horaire soit vraiment fermée.
@@ -497,7 +504,7 @@ un danger structurel, il ne peut jamais en créer un ni l'agrandir. Ollama
 python -m pytest tests/ -q
 ```
 
-167 tests. Les plus importants :
+171 tests. Les plus importants :
 
 * `test_no_lookahead.py` — tronquer ou corrompre le futur ne doit changer
   **aucune** valeur de feature passée. Si ce test tombe, tout le reste est un
