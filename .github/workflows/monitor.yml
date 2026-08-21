@@ -103,10 +103,18 @@ jobs:
             exit 0
           fi
           git commit -m "monitor state $(date -u +%Y-%m-%dT%H:%MZ) [skip ci]"
-          # Another run may have pushed while this one worked.
+          # Push to the branch by name rather than relying on tracking config,
+          # which the checkout action does not always set up the same way.
+          # Another run may also have pushed while this one worked.
+          BRANCH="${GITHUB_REF_NAME}"
           for attempt in 1 2 3; do
-            git pull --rebase --quiet && git push --quiet && exit 0
+            if git pull --rebase --quiet origin "$BRANCH" \
+               && git push --quiet origin "HEAD:$BRANCH"; then
+              echo "state saved to $BRANCH"
+              exit 0
+            fi
             echo "push attempt $attempt failed, retrying"
             sleep $((attempt * 5))
           done
+          echo "could not save state - the next run will re-read the last saved one"
           exit 1
