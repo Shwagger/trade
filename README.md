@@ -33,31 +33,45 @@ ligne.
 
 ---
 
-## Installation
+## Installation — les trois seules commandes à taper
 
-```bash
-git clone <ce-dépôt> && cd trade
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+```
+git clone https://github.com/Shwagger/trade.git
+cd trade
+bash scripts/setup_mac.sh
 ```
 
-Aucun GPU, aucun torch, aucune API payante. Tourne sur un MacBook 2012 / 8 Go :
-un fold complet (6 000 barres d'entraînement) prend quelques secondes.
+C'est tout. Le script trouve ton Python, crée l'environnement, installe les
+dépendances, lance les 158 tests, télécharge de vraies barres EURUSD, fait
+tourner la validation, entraîne le modèle et te montre une alerte réelle.
 
-## Démarrage en 30 secondes
+Deux pièges macOS qu'il gère à ta place :
 
-Copie **une ligne à la fois**. Ne colle jamais un bloc contenant des commentaires
-`#` dans zsh : par défaut le shell macOS ne les reconnaît pas et te renvoie
-`zsh: parse error near ')'`.
+* **`command not found: python`** — sur macOS c'est `python3`. Le script le
+  détecte seul, et une fois l'environnement activé, `python` fonctionne.
+* **`zsh: parse error near ')'`** — tu as collé un bloc contenant des
+  commentaires `#`. Le zsh interactif ne les reconnaît pas. D'où un script.
 
-```bash
-python -m forexai fetch --symbol EURUSD --timeframe 1h
-python -m forexai walkforward --source csv --path data/raw/EURUSD_1H.csv
-python -m forexai train --source csv --path data/raw/EURUSD_1H.csv
-python -m forexai signal
-python -m forexai search --n 3000 --jobs 4
-python -m forexai monitor --interval 300
+Si le script dit qu'il ne trouve aucun Python 3 :
+
 ```
+xcode-select --install
+```
+
+Accepte la fenêtre, attends la fin, relance le script.
+
+Aucun GPU, aucun torch, aucune API payante. Tourne sur un MacBook 2012 / 8 Go.
+
+## Ensuite, à chaque nouvelle session de terminal
+
+```
+cd trade
+source .venv/bin/activate
+```
+
+Sans cette ligne, `python -m forexai` ne trouvera rien.
+
+## Les commandes
 
 | commande | ce qu'elle fait |
 |---|---|
@@ -411,7 +425,7 @@ un danger structurel, il ne peut jamais en créer un ni l'agrandir. Ollama
 python -m pytest tests/ -q
 ```
 
-157 tests. Les plus importants :
+158 tests. Les plus importants :
 
 * `test_no_lookahead.py` — tronquer ou corrompre le futur ne doit changer
   **aucune** valeur de feature passée. Si ce test tombe, tout le reste est un

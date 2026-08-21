@@ -47,11 +47,27 @@ def test_trade_alert_carries_the_whole_order():
 
 
 def test_trade_alert_says_do_nothing_when_risk_refuses():
+    """The model wanted in, the risk engine said no: say which, and why."""
     text = format_trade_alert(
         "EURUSD", "1h", pd.Timestamp("2024-05-02 03:00", tz="UTC"),
         a_decision(), a_plan(approved=False), equity=10_000.0,
     )
     assert "WAIT" in text and "Do nothing" in text
+    assert "risk manager refused" in text
+
+
+def test_wait_alert_reports_the_signal_reason_not_the_risk_reason():
+    """When no setup fired at all, blaming the risk manager is misleading."""
+    quiet = Decision(
+        direction=0, score=0.02, confidence=0.30, lift=1.01,
+        ml_score=0.03, ta_score=0.01, reason="edge below threshold",
+    )
+    text = format_trade_alert(
+        "EURUSD", "1h", pd.Timestamp("2024-05-02 13:00", tz="UTC"),
+        quiet, a_plan(approved=False), equity=10_000.0,
+    )
+    assert "edge below threshold" in text
+    assert "risk manager refused" not in text
 
 
 def test_risk_percentage_is_shown_and_respects_the_mandate():

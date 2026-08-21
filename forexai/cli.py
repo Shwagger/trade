@@ -354,8 +354,9 @@ def cmd_signal(args: argparse.Namespace) -> int:
         return 1
 
     last = idx[-1]
-    signals = make_signals(blob["model"], ds, pd.Index([last]), cfg)
-    decision = decide(signals.iloc[-1])
+    recent = idx[-min(len(idx), args.history):]
+    signals = make_signals(blob["model"], ds, recent, cfg)
+    decision = decide(signals.loc[last])
 
     print(f"\nlast closed bar : {last}  close {ds.bars.loc[last, 'close']:.5f}")
     print(f"model trained   : {blob['trained_at']}  ({blob['train_rows']:,} rows)")
@@ -381,6 +382,60 @@ def cmd_signal(args: argparse.Namespace) -> int:
         atr=float(ds.features.loc[last, "atr"]),
     )
     print(f"risk manager    : {plan}")
+
+    # The alert is the deliverable: the exact order, or an explicit "do nothing".
+    from .notify import build_notifier, format_trade_alert
+
+    alert = format_trade_alert(
+        symbol=cfg.instrument.symbol,
+        timeframe=cfg.data.timeframe,
+        bar_time=last,
+        decision=decision,
+        plan=plan,
+        equity=cfg.initial_equity,
+    )
+    print("\n" + "-" * 62)
+    print(alert)
+    print("-" * 62)
+
+    if args.telegram:
+        notifier = build_notifier(True)
+        if notifier is not None and getattr(notifier, "enabled", False):
+            print("alert sent" if notifier.send(alert) else "alert could not be delivered")
+
+    # A quiet market is the normal case, and a bare "WAIT" looks like a broken
+    # program. Show when the system last actually wanted to trade.
+    if decision.direction == 0:
+        acted = signals.index[signals["direction"] != 0]
+        taken = (signals["direction"] != 0).sum()
+        print(
+            f"\nover the last {len(recent):,} bars the system proposed "
+            f"{taken} trade(s) ({100.0 * taken / max(len(recent), 1):.1f}% of bars)."
+        )
+        if len(acted):
+            when = acted[-1]
+            past = decide(signals.loc[when])
+            past_rm = RiskManager(cfg.risk, cfg.instrument, cfg.costs, cfg.initial_equity)
+            past_rm.on_new_bar(when)
+            past_plan = past_rm.evaluate(
+                timestamp=when,
+                direction=past.direction,
+                reference_price=float(ds.bars.loc[when, "close"]),
+                atr=float(ds.features.loc[when, "atr"]),
+            )
+            print(f"\nmost recent actionable signal was {when} (historical, do not trade it):")
+            print("-" * 62)
+            print(
+                format_trade_alert(
+                    symbol=cfg.instrument.symbol, timeframe=cfg.data.timeframe,
+                    bar_time=when, decision=past, plan=past_plan,
+                    equity=cfg.initial_equity,
+                )
+            )
+            print("-" * 62)
+        else:
+            print("It has not wanted to trade once in that window.")
+
     print(
         "\n(The reference price is the last close; a live order fills at the next\n"
         " open, so re-run at the bar boundary before acting.)"
@@ -488,6 +543,10 @@ def build_parser() -> argparse.ArgumentParser:
     sg = sub.add_parser("signal", help="decision for the last closed bar", parents=[common])
     sg.add_argument("--llm", action="store_true", help="ask the local LLM for a risk review")
     sg.add_argument("--llm-model", default="llama3.2:3b")
+    sg.add_argument("--telegram", action="store_true",
+                    help="also send the alert to Telegram")
+    sg.add_argument("--history", type=int, default=500,
+                    help="bars of context used to show recent signal activity")
     sg.set_defaults(func=cmd_signal)
 
     se = sub.add_parser(

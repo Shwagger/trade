@@ -59,11 +59,20 @@ def format_trade_alert(
     equity: float,
 ) -> str:
     """The actionable message: everything needed to place the order by hand."""
+    if decision.direction == 0:
+        return (
+            f"WAIT - {symbol} {timeframe}\n"
+            f"bar {bar_time}\n"
+            f"No setup: {decision.reason}.\n"
+            f"  ml {decision.ml_score:+.2f} | rules {decision.ta_score:+.2f}\n"
+            f"No order. Do nothing - most bars end here, and that is the point."
+        )
+
     if not plan.approved:
         return (
             f"WAIT - {symbol} {timeframe}\n"
             f"bar {bar_time}\n"
-            f"Signal was {decision.action} but the risk manager refused it:\n"
+            f"The model wanted {decision.action}, the risk manager refused:\n"
             f"  {plan.reason}\n"
             f"No order. Do nothing."
         )
