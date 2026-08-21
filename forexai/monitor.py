@@ -193,6 +193,16 @@ class Monitor:
         return int((exit_ - first) / pd.Timedelta(days=1)) + 1
 
     # ------------------------------------------------------------------
+    @staticmethod
+    def bar_interval(index: pd.DatetimeIndex) -> pd.Timedelta:
+        """Spacing between bars, measured rather than assumed."""
+        if index is None or len(index) < 3:
+            return pd.Timedelta(hours=1)
+        step = pd.Series(index).diff().dropna().median()
+        if pd.isna(step) or step <= pd.Timedelta(0):
+            return pd.Timedelta(hours=1)
+        return step
+
     def _notify(self, text: str) -> None:
         """Deliver an alert. Never let a messaging failure stop the watch."""
         if self.notifier is None or not getattr(self.notifier, "enabled", False):
@@ -273,9 +283,10 @@ class Monitor:
         # per hour and unbearable when catching up on a week of downtime.
         signals = make_signals(self.model, ds, pd.Index(new_bars), self.cfg)
 
+        interval = self.bar_interval(ds.bars.index)
         rm = self._risk_manager()
         for timestamp in new_bars:
-            events.extend(self._process_bar(ds, timestamp, rm, signals))
+            events.extend(self._process_bar(ds, timestamp, rm, signals, interval))
             self._store_risk(rm)
             self.state.last_bar = str(timestamp)
             self.state.bars_since_train += 1
@@ -297,6 +308,7 @@ class Monitor:
         timestamp: pd.Timestamp,
         rm: RiskManager,
         signals: pd.DataFrame,
+        interval: pd.Timedelta,
     ) -> List[dict]:
         cfg = self.cfg
         events: List[dict] = []
@@ -386,13 +398,26 @@ class Monitor:
                             decided_at=str(timestamp),
                         )
                     )
-                    # Size the order against the bar that just closed so the
-                    # alert is actionable *now*. The monitor's own paper fill
-                    # still happens at the next open, like the backtest.
+                    # Size the order against the bar that just closed, so the
+                    # alert is actionable now - but evaluate the risk gate at
+                    # the time the order will actually be placed, which is the
+                    # next bar's open.
+                    #
+                    # Getting this wrong is not cosmetic. A signal at 06:00 UTC
+                    # sits in the Asian session and is refused, while its fill
+                    # at 07:00 is in London and is accepted: the trade is taken
+                    # and no alert is ever sent. Observed live, on the first
+                    # real trade this watcher took.
+                    #
+                    # The next bar does not exist yet, so its time is estimated
+                    # from the bar spacing. Across a weekend the estimate can be
+                    # off; at every other boundary it is right, which is far
+                    # better than being systematically wrong at all of them.
+                    fill_time = timestamp + interval
                     preview_rm = self._risk_manager()
-                    preview_rm.on_new_bar(timestamp)
+                    preview_rm.on_new_bar(fill_time)
                     preview = preview_rm.evaluate(
-                        timestamp=timestamp,
+                        timestamp=fill_time,
                         direction=decision.direction,
                         reference_price=float(bar["close"]),
                         atr=atr,
@@ -404,6 +429,7 @@ class Monitor:
                             lift=round(decision.lift, 3),
                             score=round(decision.score, 4),
                             approved=preview.approved,
+                            expected_fill=str(fill_time),
                             lots=preview.lots,
                             entry=round(preview.entry, 5) if preview.approved else None,
                             stop_loss=round(preview.stop_loss, 5) if preview.approved else None,

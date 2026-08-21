@@ -161,3 +161,102 @@ def test_monitor_state_roundtrips_through_disk(tmp_path):
     state = MonitorState(symbol="GBPUSD", equity=10_123.45, last_bar="2024-05-02 13:00:00+00:00")
     state.save(path)
     assert MonitorState.load(path) == state
+
+
+# ----------------------------------------------------------------------
+# the alert must describe the order that will actually be placed
+# ----------------------------------------------------------------------
+class _AlwaysLong:
+    """A model that always wants to buy, so the gates are what is under test."""
+
+    def directional_score(self, X):
+        return pd.DataFrame(
+            {"p_short": 0.10, "p_none": 0.30, "p_long": 0.60,
+             "score": 0.9, "confidence": 0.60, "lift": 2.0},
+            index=X.index,
+        )
+
+
+class _Recorder:
+    enabled = True
+
+    def __init__(self):
+        self.messages = []
+
+    def send(self, text):
+        self.messages.append(text)
+        return True
+
+
+def _permissive_config():
+    cfg = Config()
+    cfg.signal.require_agreement = False
+    cfg.signal.min_score = 0.10
+    return cfg
+
+
+def test_bar_interval_is_measured_not_assumed():
+    from forexai.monitor import Monitor
+
+    hourly = pd.date_range("2024-01-02", periods=50, freq="1h", tz="UTC")
+    daily = pd.date_range("2024-01-02", periods=50, freq="1D", tz="UTC")
+    assert Monitor.bar_interval(hourly) == pd.Timedelta(hours=1)
+    assert Monitor.bar_interval(daily) == pd.Timedelta(days=1)
+    assert Monitor.bar_interval(hourly[:1]) == pd.Timedelta(hours=1)   # degenerate
+
+
+def test_a_signal_before_a_session_opens_still_raises_an_alert(tmp_path):
+    """The failure seen live on this watcher's first real trade.
+
+    A signal at 06:00 UTC is judged in the Asian session and refused, but its
+    order is placed at 07:00, in London, and is accepted. Judging the alert at
+    the signal bar meant the trade was taken in silence.
+    """
+    from forexai.monitor import Monitor
+
+    cfg = _permissive_config()
+    bars = generate_ohlcv(3_000, seed=404)
+    ds = build_dataset(bars, cfg)
+
+    usable = ds.predictable()
+    six = usable[usable.hour == 6]
+    assert len(six), "fixture needs a 06:00 bar"
+    signal_bar = six[-1]
+    assert (signal_bar + pd.Timedelta(hours=1)).hour == 7
+
+    recorder = _Recorder()
+    monitor = Monitor(cfg, _AlwaysLong(), workdir=tmp_path,
+                      retrain_every=0, notifier=recorder)
+    monitor.state.last_bar = str(usable[usable < signal_bar][-1])
+    monitor.step(bars.loc[:signal_bar])
+
+    assert recorder.messages, "a trade was queued with no alert at all"
+    alert = recorder.messages[-1]
+    assert "LONG" in alert, f"expected an actionable alert, got:\n{alert}"
+    assert "session filter" not in alert
+    assert monitor.state.pending is not None
+
+
+def test_a_signal_before_a_closed_session_is_still_refused(tmp_path):
+    """The correction must not turn the session filter off."""
+    from forexai.monitor import Monitor
+
+    cfg = _permissive_config()
+    bars = generate_ohlcv(3_000, seed=404)
+    ds = build_dataset(bars, cfg)
+
+    usable = ds.predictable()
+    # 03:00 -> fills at 04:00, both inside the Asian session.
+    three = usable[usable.hour == 3]
+    assert len(three), "fixture needs a 03:00 bar"
+    signal_bar = three[-1]
+
+    recorder = _Recorder()
+    monitor = Monitor(cfg, _AlwaysLong(), workdir=tmp_path,
+                      retrain_every=0, notifier=recorder)
+    monitor.state.last_bar = str(usable[usable < signal_bar][-1])
+    monitor.step(bars.loc[:signal_bar])
+
+    assert all("LONG" not in message for message in recorder.messages), (
+        "a trade that the risk manager will refuse must not be alerted as actionable"
+    )

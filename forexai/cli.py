@@ -492,14 +492,20 @@ def cmd_signal(args: argparse.Namespace) -> int:
         print(f"llm review      : {'online' if rev.available else 'offline'} - {note}")
         decision.direction = direction
 
+    # The order would be placed on the next bar's open, so the session, spread
+    # and volatility gates must be judged at that moment, not at this close.
+    from .monitor import Monitor
+
+    fill_time = last + Monitor.bar_interval(ds.bars.index)
     rm = RiskManager(cfg.risk, cfg.instrument, cfg.costs, cfg.initial_equity)
-    rm.on_new_bar(last)
+    rm.on_new_bar(fill_time)
     plan = rm.evaluate(
-        timestamp=last,
+        timestamp=fill_time,
         direction=decision.direction,
         reference_price=float(ds.bars.loc[last, "close"]),
         atr=float(ds.features.loc[last, "atr"]),
     )
+    print(f"expected fill   : {fill_time}")
     print(f"risk manager    : {plan}")
 
     # The alert is the deliverable: the exact order, or an explicit "do nothing".

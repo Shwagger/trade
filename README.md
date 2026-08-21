@@ -42,7 +42,7 @@ bash scripts/setup_mac.sh
 ```
 
 C'est tout. Le script trouve ton Python, crée l'environnement, installe les
-dépendances, lance les 183 tests, télécharge de vraies barres EURUSD, fait
+dépendances, lance les 186 tests, télécharge de vraies barres EURUSD, fait
 tourner la validation, entraîne le modèle et te montre une alerte réelle.
 
 Deux pièges macOS qu'il gère à ta place :
@@ -491,7 +491,12 @@ comptes meurent.
 
 Sur chaque bougie fermée :
 
-1. il exécute l'ordre décidé à la bougie précédente, à l'open — jamais au close
+1. il exécute l'ordre décidé à la bougie précédente, à l'open — jamais au close.
+   L'alerte, elle, évalue le moteur de risque à **l'heure de l'exécution
+   prévue**, pas à celle du signal : un signal à 06:00 UTC est en session
+   asiatique et serait refusé, alors que son exécution à 07:00 est à Londres et
+   passe. Juger l'alerte à la mauvaise heure fait prendre le trade en silence —
+   c'est arrivé sur le premier vrai trade de ce système
 2. il gère la position ouverte avec **exactement** les règles de sortie du
    backtester (fonction partagée, pas réécrite — un test vérifie que les deux
    produisent les mêmes trades, au pip près)
@@ -538,7 +543,7 @@ un danger structurel, il ne peut jamais en créer un ni l'agrandir. Ollama
 python -m pytest tests/ -q
 ```
 
-183 tests. Les plus importants :
+186 tests. Les plus importants :
 
 * `test_no_lookahead.py` — tronquer ou corrompre le futur ne doit changer
   **aucune** valeur de feature passée. Si ce test tombe, tout le reste est un
