@@ -35,8 +35,15 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 
-from .backtest import ROLLOVER_HOUR, resolve_exit
+from .backtest import ROLLOVER_HOUR, resolve_exit, update_stop
 from .config import Config
+from .notify import (
+    Notifier,
+    format_close,
+    format_drift,
+    format_halt,
+    format_trade_alert,
+)
 from .pipeline import build_dataset, fit_model, make_signals
 from .risk import RiskManager
 from .signal import decide
@@ -55,6 +62,8 @@ class PaperPosition:
     bars_held: int = 0
     score: float = 0.0
     confidence: float = 0.0
+    initial_risk: float = 0.0
+    atr_at_entry: float = 0.0
 
 
 @dataclass
@@ -144,15 +153,18 @@ class Monitor:
         workdir: str | Path = "runs/monitor",
         retrain_every: int = 500,
         backtest_expectancy: Optional[Dict[str, float]] = None,
+        notifier: Optional[Notifier] = None,
     ):
         self.cfg = cfg
         self.model = model
+        self.notifier = notifier
         self.dir = Path(workdir) / cfg.instrument.symbol
         self.state_path = self.dir / "state.json"
         self.journal = Journal(self.dir / "journal.jsonl")
         self.retrain_every = retrain_every
         self.backtest_expectancy = backtest_expectancy or {}
 
+        self._halt_announced = False
         self.state = MonitorState.load(self.state_path)
         self.state.symbol = cfg.instrument.symbol
         if not self.state.started_at:
@@ -180,6 +192,15 @@ class Monitor:
         return int((exit_ - first) / pd.Timedelta(days=1)) + 1
 
     # ------------------------------------------------------------------
+    def _notify(self, text: str) -> None:
+        """Deliver an alert. Never let a messaging failure stop the watch."""
+        if self.notifier is None or not getattr(self.notifier, "enabled", False):
+            return
+        try:
+            self.notifier.send(text)
+        except Exception:                                # noqa: BLE001 - see docstring
+            self.journal.write("notify_failed", detail="alert could not be delivered")
+
     def _risk_manager(self) -> RiskManager:
         """Rehydrate the risk engine from disk, so its memory is not lost."""
         rm = RiskManager(
@@ -292,6 +313,8 @@ class Monitor:
                         take_profit=entry + d * cfg.risk.tp_atr_mult * pending.atr,
                         entry_time=str(timestamp), risk_amount=plan.risk_amount,
                         score=pending.score, confidence=pending.confidence,
+                        initial_risk=cfg.risk.sl_atr_mult * pending.atr,
+                        atr_at_entry=pending.atr,
                     )
                 )
                 rm.register_open()
@@ -326,6 +349,16 @@ class Monitor:
                 timed_out=position.bars_held >= cfg.labels.max_holding_bars,
             )
             if exit_exec is None:
+                position.stop_loss = update_stop(
+                    direction=position.direction,
+                    entry=position.entry,
+                    stop_loss=position.stop_loss,
+                    initial_risk=position.initial_risk,
+                    atr_at_entry=position.atr_at_entry,
+                    high=float(bar["high"]), low=float(bar["low"]),
+                    breakeven_at_r=cfg.risk.breakeven_at_r,
+                    trail_atr_mult=cfg.risk.trail_atr_mult,
+                )
                 position.bars_held += 1
                 self.state.position = asdict(position)
             else:
@@ -344,15 +377,48 @@ class Monitor:
                             decided_at=str(timestamp),
                         )
                     )
+                    # Size the order against the bar that just closed so the
+                    # alert is actionable *now*. The monitor's own paper fill
+                    # still happens at the next open, like the backtest.
+                    preview_rm = self._risk_manager()
+                    preview_rm.on_new_bar(timestamp)
+                    preview = preview_rm.evaluate(
+                        timestamp=timestamp,
+                        direction=decision.direction,
+                        reference_price=float(bar["close"]),
+                        atr=atr,
+                    )
                     events.append(
                         self.journal.write(
                             "signal", bar=str(timestamp), action=decision.action,
                             confidence=round(decision.confidence, 4),
                             lift=round(decision.lift, 3),
                             score=round(decision.score, 4),
+                            approved=preview.approved,
+                            lots=preview.lots,
+                            entry=round(preview.entry, 5) if preview.approved else None,
+                            stop_loss=round(preview.stop_loss, 5) if preview.approved else None,
+                            take_profit=(
+                                round(preview.take_profit, 5) if preview.approved else None
+                            ),
                             detail="will fill at the next bar open",
                         )
                     )
+                    if preview.approved:
+                        self._notify(
+                            format_trade_alert(
+                                symbol=cfg.instrument.symbol,
+                                timeframe=cfg.data.timeframe,
+                                bar_time=timestamp,
+                                decision=decision,
+                                plan=preview,
+                                equity=self.state.equity,
+                            )
+                        )
+
+        if rm.state.halted and not self._halt_announced:
+            self._halt_announced = True
+            self._notify(format_halt(cfg.instrument.symbol, rm.state.halt_reason))
         return events
 
     # ------------------------------------------------------------------
@@ -397,6 +463,7 @@ class Monitor:
         }
         self.state.closed_trades.append(trade)
         self.state.position = None
+        self._notify(format_close(cfg.instrument.symbol, trade))
         return self.journal.write("close", **trade)
 
     # ------------------------------------------------------------------
@@ -426,6 +493,16 @@ class Monitor:
         if floor is None:
             return None
         if forward["expectancy_r"] < floor:
+            self._notify(
+                format_drift(
+                    self.cfg.instrument.symbol,
+                    {
+                        "forward_expectancy_r": forward["expectancy_r"],
+                        "backtest_ci_low": floor,
+                        "trades": forward["trades"],
+                    },
+                )
+            )
             return self.journal.write(
                 "drift_alert",
                 forward_expectancy_r=forward["expectancy_r"],

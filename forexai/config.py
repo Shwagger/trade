@@ -79,6 +79,10 @@ class RiskConfig:
     sl_atr_mult: float = 1.5
     tp_atr_mult: float = 3.0
     min_net_reward_risk: float = 1.5   # after spread, slippage and commission
+    # Stop management. Both default to off: they change the risk profile, and
+    # a stop that moves is a stop that can be moved for the wrong reasons.
+    breakeven_at_r: float = 0.0        # move the stop to entry after N x R in favour
+    trail_atr_mult: float = 0.0        # trail N x ATR behind the best price seen
     max_open_positions: int = 1
     max_daily_loss: float = 0.02        # 2% of start-of-day equity
     max_total_drawdown: float = 0.20    # kill switch

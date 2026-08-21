@@ -146,3 +146,89 @@ def test_only_one_position_at_a_time():
         result.trades["entry_time"].shift(-1) < result.trades["exit_time"]
     ).fillna(False)
     assert not overlaps.any()
+
+
+# ----------------------------------------------------------------------
+# stop management
+# ----------------------------------------------------------------------
+from forexai.backtest import update_stop  # noqa: E402
+
+
+def test_stops_never_move_away_from_the_target():
+    for direction in (1, -1):
+        moved = update_stop(
+            direction=direction, entry=1.1000,
+            stop_loss=1.1000 - direction * 0.0015,
+            initial_risk=0.0015, atr_at_entry=0.0010,
+            high=1.0990, low=1.0990,          # price went against us
+            breakeven_at_r=1.0, trail_atr_mult=1.0,
+        )
+        original = 1.1000 - direction * 0.0015
+        assert (moved >= original) if direction > 0 else (moved <= original)
+
+
+def test_breakeven_moves_the_stop_to_entry_after_one_r():
+    stop = update_stop(
+        direction=1, entry=1.1000, stop_loss=1.0985,
+        initial_risk=0.0015, atr_at_entry=0.0010,
+        high=1.1016, low=1.1000,              # +1.07R excursion
+        breakeven_at_r=1.0,
+    )
+    assert stop == pytest.approx(1.1000)
+
+
+def test_breakeven_does_not_trigger_early():
+    stop = update_stop(
+        direction=1, entry=1.1000, stop_loss=1.0985,
+        initial_risk=0.0015, atr_at_entry=0.0010,
+        high=1.1010, low=1.1000,              # only +0.67R
+        breakeven_at_r=1.0,
+    )
+    assert stop == pytest.approx(1.0985)
+
+
+def test_trailing_stop_follows_the_best_price():
+    stop = update_stop(
+        direction=1, entry=1.1000, stop_loss=1.0985,
+        initial_risk=0.0015, atr_at_entry=0.0010,
+        high=1.1040, low=1.1000, trail_atr_mult=1.5,
+    )
+    assert stop == pytest.approx(1.1040 - 1.5 * 0.0010)
+
+
+def test_trailing_stop_is_mirrored_for_shorts():
+    stop = update_stop(
+        direction=-1, entry=1.1000, stop_loss=1.1015,
+        initial_risk=0.0015, atr_at_entry=0.0010,
+        high=1.1000, low=1.0960, trail_atr_mult=1.5,
+    )
+    assert stop == pytest.approx(1.0960 + 1.5 * 0.0010)
+
+
+def test_breakeven_turns_a_loss_into_a_scratch():
+    """The whole point: give back the excursion, not the risk."""
+    bars = flat_bars(n=40)
+    bars.iloc[13, bars.columns.get_loc("high")] = 1.1020    # +1.3R excursion
+    bars.iloc[16, bars.columns.get_loc("low")] = 1.0980     # would have been -1R
+
+    plain = run(bars, make_config()).trades.iloc[0]
+    cfg = make_config()
+    cfg.risk.breakeven_at_r = 1.0
+    protected = run(bars, cfg).trades.iloc[0]
+
+    assert plain["r_multiple"] == pytest.approx(-1.0, abs=1e-6)
+    assert protected["r_multiple"] == pytest.approx(0.0, abs=1e-6)
+
+
+def test_a_bar_that_stops_us_out_cannot_be_saved_by_its_own_spike():
+    """Intrabar order is unknowable, so the favourable extreme must not
+    retroactively protect a trade the same bar already stopped."""
+    bars = flat_bars(n=40)
+    row = 13
+    bars.iloc[row, bars.columns.get_loc("high")] = 1.1030    # big spike up
+    bars.iloc[row, bars.columns.get_loc("low")] = 1.0980     # and a stop-out
+    cfg = make_config()
+    cfg.risk.breakeven_at_r = 1.0
+    trade = run(bars, cfg).trades.iloc[0]
+    assert trade["exit_reason"] == "stop"
+    assert trade["r_multiple"] == pytest.approx(-1.0, abs=1e-6)

@@ -165,6 +165,7 @@ def cmd_monitor(args: argparse.Namespace) -> int:
     import time
 
     from .monitor import Monitor
+    from .notify import build_notifier
 
     blob = _load_model()
     if blob is None:
@@ -182,6 +183,7 @@ def cmd_monitor(args: argparse.Namespace) -> int:
         cfg, blob["model"], workdir=args.workdir,
         retrain_every=args.retrain_every,
         backtest_expectancy=backtest_expectancy,
+        notifier=build_notifier(args.telegram),
     )
     if backtest_expectancy:
         print(
@@ -509,6 +511,9 @@ def build_parser() -> argparse.ArgumentParser:
     mo.add_argument("--retrain-every", type=int, default=500,
                     help="bars between refits; 0 disables retraining")
     mo.add_argument("--workdir", default="runs/monitor")
+    mo.add_argument("--telegram", action="store_true",
+                    help="send actionable alerts to Telegram "
+                         "(needs TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)")
     mo.set_defaults(func=cmd_monitor)
 
     pp = sub.add_parser("paper", help="dry-run replay of recent bars", parents=[common])

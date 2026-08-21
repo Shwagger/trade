@@ -91,6 +91,22 @@ python -m forexai fetch --symbol EURUSD --timeframe 1d --provider stooq
 python -m forexai walkforward --config config/eurusd_d1_real.yaml
 ```
 
+**Pour que je puisse lancer les tests moi-même :** je n'ai aucun accès aux
+serveurs de données de marché depuis mon environnement (Yahoo, Stooq,
+Alphavantage, Telegram : tous bloqués par la politique réseau). Ce qui passe,
+c'est GitHub. Donc si tu veux que je fasse tourner la validation sur tes vraies
+barres :
+
+```bash
+python -m forexai fetch --symbol EURUSD --timeframe 1h --years 2 --out data/shared/EURUSD_1H.csv
+git add data/shared/EURUSD_1H.csv
+git commit -m "Add real EURUSD H1 bars"
+git push
+```
+
+Le dossier `data/shared/` est exclu du `.gitignore` exactement pour ça. Un H1 sur
+deux ans pèse environ 1 Mo.
+
 **Le plus sérieux — l'export de ton propre courtier**, parce que c'est chez lui
 que tu vas trader et que ses prix et ses frais sont les seuls qui comptent :
 
@@ -218,17 +234,44 @@ Le verdict final n'est jamais « lance-toi » : au mieux c'est **GO TO DEMO**.
 
 ---
 
-## Chercher des milliers de stratégies — sans se mentir
+## Chercher des millions de stratégies — sans se mentir
 
 ```bash
-python -m forexai search --n 3000 --jobs 4
+python -m forexai search --n 4000 --jobs 4
 ```
 
-L'espace de recherche fait **15,9 millions de combinaisons** : 4 familles de
-règles (tendance, retour à la moyenne, cassure, momentum) × leurs périodes ×
-seuils × stops × cibles × durées × sessions. La commande en échantillonne
-plusieurs milliers et les backteste toutes, avec le même moteur de risque et les
-mêmes frais que le reste du système.
+L'espace de recherche fait **700 710 912 combinaisons**. Sept cents millions.
+
+| dimension | valeurs |
+|---|---|
+| familles de règles | tendance, retour à la moyenne, cassure, momentum, croisement MACD, croisement stochastique, fade de canal, cassure de session, pullback, squeeze de volatilité, engulfing |
+| filtres d'entrée | aucun, alignement multi-timeframe, bande de volatilité, les deux |
+| gestion de sortie | fixe, break-even à 1R, stop suiveur ATR, break-even + suiveur |
+| paramètres | périodes rapides/lentes, RSI, Donchian, seuil ADX, Bollinger, stop, cible, durée max, session |
+
+### Pourquoi générer plutôt que télécharger des PDF
+
+Tu m'as dit : « il y a des millions de stratégies en PDF sur Google, il doit
+toutes les connaître ». Je te dois la vérité là-dessus, parce que c'est ton
+argent : **collectionner des PDF ne marcherait pas, et générer marche mieux.**
+
+* Ces millions de documents décrivent en réalité **une petite douzaine d'idées**
+  reformulées : croisement de moyennes, RSI en survente, cassure de range,
+  divergence, retour à la moyenne, pattern de bougie. Le vocabulaire du trading
+  technique est petit ; c'est le marketing qui est grand.
+* Un PDF ne se backteste pas. « Achetez quand la tendance est forte » n'est pas
+  exécutable : il manque la définition de « forte », le stop, la taille, la
+  sortie. Il faudrait de toute façon le traduire en règles — c'est exactement ce
+  que fait `StrategySpec`.
+* Les 11 familles ci-dessus **couvrent** ce que ces documents décrivent, et le
+  générateur en produit 700 millions de variantes, dont des milliers que
+  personne n'a jamais publiées.
+* La contrainte n'a jamais été le nombre de stratégies. Elle est de savoir
+  **laquelle tient hors échantillon** — et c'est un problème statistique, pas un
+  problème de collecte.
+
+Chaque candidat est backtesté avec le même moteur de risque et les mêmes frais
+que le reste du système. 4 000 candidats prennent environ 3 minutes sur 4 cœurs.
 
 Et surtout, elle te protège du piège qui a ruiné plus de comptes que n'importe
 quel krach : **si tu testes 3 000 stratégies sur un marché de pile ou face, la
@@ -253,6 +296,53 @@ Deux défenses, non désactivables :
 
 Pas de gagnant est le résultat **normal**. Le jour où il y en a un, c'est là que
 ça devient intéressant.
+
+---
+
+## Alertes Telegram — savoir quoi faire, et comment
+
+```bash
+export TELEGRAM_BOT_TOKEN="123456789:AAF..."
+export TELEGRAM_CHAT_ID="987654321"
+python -m forexai monitor --interval 300 --telegram
+```
+
+Une alerte qui dit « ACHETER EURUSD » ne vaut rien : elle te laisse les deux
+seules décisions qui comptent — où mettre le stop et quelle taille prendre.
+Celles d'ici contiennent l'ordre complet :
+
+```
+LONG EURUSD 1h
+bar 2024-05-02 13:00:00+00:00
+
+  entry     ~1.08000  (market, now)
+  stop      1.07850   (16.4 pips)
+  target    1.08300   (28.6 pips)
+  size      0.29 lots
+  risk      49.59  (0.50% of 10,000)
+  R:R       2.00  (1.63 after costs)
+
+  confidence 31% (1.35x base rate)
+  ml +0.50 | rules +0.30
+
+Place the stop with the order, not after.
+```
+
+Tu reçois aussi la clôture de chaque trade papier (`+1,8R`), l'alerte de dérive,
+et l'arrêt d'urgence si le kill switch se déclenche.
+
+### Créer le bot (2 minutes, chez toi)
+
+1. Dans Telegram, écris à **@BotFather**, envoie `/newbot`, suis les questions.
+   Il te donne un token du genre `123456789:AAF...`.
+2. **Écris un message à ton bot** — sans ça il n'a pas le droit de t'écrire.
+3. Ouvre `https://api.telegram.org/bot<TON_TOKEN>/getUpdates` dans le navigateur
+   et copie le `chat.id`.
+4. Exporte les deux variables ci-dessus et lance le monitor.
+
+Sans les variables, les alertes tombent dans la console au lieu de se perdre.
+Et si Telegram est en panne, le monitor continue de surveiller : une alerte
+ratée est journalisée, elle n'arrête jamais le processus.
 
 ---
 
@@ -321,7 +411,7 @@ un danger structurel, il ne peut jamais en créer un ni l'agrandir. Ollama
 python -m pytest tests/ -q
 ```
 
-88 tests. Les plus importants :
+157 tests. Les plus importants :
 
 * `test_no_lookahead.py` — tronquer ou corrompre le futur ne doit changer
   **aucune** valeur de feature passée. Si ce test tombe, tout le reste est un
@@ -335,8 +425,13 @@ python -m pytest tests/ -q
   trade.** S'ils divergent, tous les chiffres de recherche deviennent une
   fiction. C'est ce test qui a attrapé un décalage d'une barre dans le comptage
   de la durée de détention.
-* `test_search.py` — le holdout ne chevauche jamais la recherche, et le seuil de
-  chance monte bien avec le nombre d'essais.
+* `test_search.py` — les 11 familles × 4 filtres sont toutes causales, le
+  holdout ne chevauche jamais la recherche, et le seuil de chance monte bien
+  avec le nombre d'essais. C'est ce test qui a montré que le pattern engulfing
+  classique ne se déclenche **jamais** en forex intraday (les bougies n'ont pas
+  de gap), ce qui a imposé la version adaptée au FX.
+* `test_notify.py` — l'alerte contient bien le stop et la taille, et un Telegram
+  injoignable ne fait jamais tomber le monitor.
 
 ---
 

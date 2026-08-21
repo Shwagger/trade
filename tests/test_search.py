@@ -8,6 +8,9 @@ from forexai.config import Config
 from forexai.data.synthetic import generate_ohlcv
 from forexai.search import (
     DEFAULT_GRID,
+    ENTRY_FILTERS,
+    EXIT_STYLES,
+    FAMILIES,
     IndicatorCache,
     StrategySpec,
     _trade_sharpe,
@@ -22,7 +25,9 @@ from forexai.search import (
 
 
 def test_the_space_is_large():
-    assert grid_size(DEFAULT_GRID) > 1_000_000
+    """Hundreds of millions of rule sets, generated rather than collected."""
+    assert grid_size(DEFAULT_GRID) > 100_000_000
+    assert len(FAMILIES) >= 11
 
 
 def test_generated_specs_are_valid():
@@ -31,7 +36,9 @@ def test_generated_specs_are_valid():
     for spec in specs:
         assert spec.fast < spec.slow, "a fast average must be faster than the slow one"
         assert spec.reward_risk >= 1.5, "the risk mandate must hold for every candidate"
-        assert spec.family in {"trend", "revert", "breakout", "momentum"}
+        assert spec.family in set(FAMILIES)
+        assert spec.entry_filter in set(ENTRY_FILTERS)
+        assert spec.exit_style in set(EXIT_STYLES)
 
 
 def test_generation_is_reproducible():
@@ -39,23 +46,49 @@ def test_generation_is_reproducible():
     assert generate_specs(50, seed=7) != generate_specs(50, seed=8)
 
 
-@pytest.mark.parametrize("family", ["trend", "revert", "breakout", "momentum"])
-def test_rules_are_causal(family):
+@pytest.mark.parametrize("family", FAMILIES)
+@pytest.mark.parametrize("entry_filter", ENTRY_FILTERS)
+def test_rules_are_causal(family, entry_filter):
     """Truncating the future must not change a past signal."""
     bars = generate_ohlcv(900, seed=17)
-    spec = StrategySpec(family=family)
+    spec = StrategySpec(family=family, entry_filter=entry_filter)
 
     full = rule_signal(spec, IndicatorCache(bars))
     truncated = rule_signal(spec, IndicatorCache(bars.iloc[:700]))
     pd.testing.assert_series_equal(full.loc[truncated.index], truncated)
 
 
-@pytest.mark.parametrize("family", ["trend", "revert", "breakout", "momentum"])
+@pytest.mark.parametrize("family", FAMILIES)
 def test_rules_produce_both_directions(family):
-    bars = generate_ohlcv(4_000, seed=23)
+    bars = generate_ohlcv(12_000, seed=23)
     signal = rule_signal(StrategySpec(family=family, adx_min=15.0), IndicatorCache(bars))
-    assert (signal == 1).any() and (signal == -1).any()
+    assert (signal == 1).any(), f"{family} never goes long"
+    assert (signal == -1).any(), f"{family} never goes short"
     assert (signal == 0).mean() > 0.2, "a rule that is always in the market is a bug"
+
+
+@pytest.mark.parametrize("exit_style", list(EXIT_STYLES))
+def test_every_exit_style_reaches_the_risk_config(exit_style):
+    from forexai.search import spec_config
+
+    cfg = spec_config(StrategySpec(exit_style=exit_style), Config())
+    expected = EXIT_STYLES[exit_style]
+    assert cfg.risk.breakeven_at_r == expected["breakeven_at_r"]
+    assert cfg.risk.trail_atr_mult == expected["trail_atr_mult"]
+
+
+def test_entry_filters_only_ever_remove_signals():
+    """A filter must narrow a family's entries, never invent new ones."""
+    bars = generate_ohlcv(6_000, seed=41)
+    cache = IndicatorCache(bars)
+    base = rule_signal(StrategySpec(family="trend", entry_filter="none"), cache)
+    for entry_filter in ("htf", "vol", "both"):
+        filtered = rule_signal(
+            StrategySpec(family="trend", entry_filter=entry_filter), cache
+        )
+        added = ((filtered != 0) & (base == 0)).sum()
+        assert added == 0, f"{entry_filter} created signals the family did not have"
+        assert (filtered != base).any(), f"{entry_filter} changed nothing"
 
 
 def test_degenerate_trade_sharpe_is_neutralised():

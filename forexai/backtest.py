@@ -33,6 +33,44 @@ from .risk import RiskManager, TradePlan
 ROLLOVER_HOUR = 22  # UTC
 
 
+def update_stop(
+    direction: int,
+    entry: float,
+    stop_loss: float,
+    initial_risk: float,
+    atr_at_entry: float,
+    high: float,
+    low: float,
+    breakeven_at_r: float = 0.0,
+    trail_atr_mult: float = 0.0,
+) -> float:
+    """Advance a stop after the bar has been checked for exits.
+
+    Order matters and is deliberate: exits are resolved against the stop as it
+    stood when the bar opened, and only then is the stop moved using that same
+    bar's extreme. Moving it first would let a bar that spiked in our favour
+    retroactively protect a trade that the same bar had already stopped out -
+    a classic way to manufacture a profitable backtest.
+
+    Stops only ever move towards the target, never away from it.
+    """
+    if direction > 0:
+        best = high
+        if breakeven_at_r > 0 and initial_risk > 0:
+            if best >= entry + breakeven_at_r * initial_risk:
+                stop_loss = max(stop_loss, entry)
+        if trail_atr_mult > 0 and atr_at_entry > 0:
+            stop_loss = max(stop_loss, best - trail_atr_mult * atr_at_entry)
+    else:
+        best = low
+        if breakeven_at_r > 0 and initial_risk > 0:
+            if best <= entry - breakeven_at_r * initial_risk:
+                stop_loss = min(stop_loss, entry)
+        if trail_atr_mult > 0 and atr_at_entry > 0:
+            stop_loss = min(stop_loss, best + trail_atr_mult * atr_at_entry)
+    return stop_loss
+
+
 def resolve_exit(
     direction: int,
     stop_loss: float,
@@ -100,6 +138,8 @@ class OpenPosition:
     take_profit: float
     score: float
     confidence: float
+    initial_risk: float = 0.0
+    atr_at_entry: float = 0.0
 
 
 class Backtester:
@@ -165,6 +205,8 @@ class Backtester:
                         take_profit=entry_exec + d * cfg.risk.tp_atr_mult * pending["atr"],
                         score=pending["score"],
                         confidence=pending["confidence"],
+                        initial_risk=cfg.risk.sl_atr_mult * pending["atr"],
+                        atr_at_entry=pending["atr"],
                     )
                     self.rm.register_open()
                 pending = None
@@ -182,6 +224,17 @@ class Backtester:
                 if exit_exec is not None:
                     trades.append(self._close(position, ts, i, exit_exec, reason))
                     position = None
+                else:
+                    position.stop_loss = update_stop(
+                        direction=position.plan.direction,
+                        entry=position.entry_exec,
+                        stop_loss=position.stop_loss,
+                        initial_risk=position.initial_risk,
+                        atr_at_entry=position.atr_at_entry,
+                        high=high[i], low=low[i],
+                        breakeven_at_r=cfg.risk.breakeven_at_r,
+                        trail_atr_mult=cfg.risk.trail_atr_mult,
+                    )
 
             # -- C. decide at the close of this bar ----------------------
             if position is None and pending is None and i + 1 < len(index):

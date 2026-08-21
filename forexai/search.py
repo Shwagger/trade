@@ -47,7 +47,26 @@ SESSION_SETS: Dict[str, tuple] = {
     "europe": ("london", "overlap"),
 }
 
-FAMILIES = ("trend", "revert", "breakout", "momentum")
+# Eleven rule families. Between them they cover the overwhelming majority of
+# what published FX strategies actually do - the vocabulary is small even when
+# the marketing is not. Combined with the filters, exits and parameter ranges
+# below, the space is large enough that no human could have written it all down.
+FAMILIES = (
+    "trend", "revert", "breakout", "momentum",
+    "macd_cross", "stoch_cross", "channel_fade", "session_breakout",
+    "pullback", "squeeze", "engulfing",
+)
+
+# Entry filters, applied on top of any family.
+ENTRY_FILTERS = ("none", "htf", "vol", "both")
+
+# Exit styles. "fixed" is stop and target only; the others manage the stop.
+EXIT_STYLES: Dict[str, Dict[str, float]] = {
+    "fixed": {"breakeven_at_r": 0.0, "trail_atr_mult": 0.0},
+    "breakeven": {"breakeven_at_r": 1.0, "trail_atr_mult": 0.0},
+    "trail": {"breakeven_at_r": 0.0, "trail_atr_mult": 2.0},
+    "be_trail": {"breakeven_at_r": 1.0, "trail_atr_mult": 2.5},
+}
 
 
 @dataclass(frozen=True)
@@ -67,6 +86,8 @@ class StrategySpec:
     tp_atr: float = 3.0
     hold: int = 48
     sessions: str = "active"
+    entry_filter: str = "none"
+    exit_style: str = "fixed"
 
     @property
     def name(self) -> str:
@@ -74,7 +95,8 @@ class StrategySpec:
             f"{self.family}:f{self.fast}/s{self.slow}/rsi{self.rsi_period}"
             f"±{self.rsi_band}/dc{self.donchian}/adx{self.adx_min:g}"
             f"/bb{self.bb_period}x{self.bb_mult:g}"
-            f"/sl{self.sl_atr:g}tp{self.tp_atr:g}h{self.hold}/{self.sessions}"
+            f"/sl{self.sl_atr:g}tp{self.tp_atr:g}h{self.hold}"
+            f"/{self.sessions}/{self.entry_filter}/{self.exit_style}"
         )
 
     @property
@@ -97,6 +119,8 @@ class IndicatorCache:
         self._adx: Dict[int, pd.Series] = {}
         self._donchian: Dict[int, tuple] = {}
         self._bollinger: Dict[tuple, tuple] = {}
+        self._macd: Optional[tuple] = None
+        self._stoch: Optional[tuple] = None
 
     def ema(self, period: int) -> pd.Series:
         if period not in self._ema:
@@ -117,6 +141,16 @@ class IndicatorCache:
         if period not in self._donchian:
             self._donchian[period] = ind.donchian(self.bars, period)
         return self._donchian[period]
+
+    def macd(self):
+        if self._macd is None:
+            self._macd = ind.macd(self.close)
+        return self._macd
+
+    def stochastic(self):
+        if self._stoch is None:
+            self._stoch = ind.stochastic(self.bars)
+        return self._stoch
 
     def bollinger(self, period: int, mult: float):
         key = (period, mult)
@@ -158,13 +192,105 @@ def rule_signal(spec: StrategySpec, cache: IndicatorCache) -> pd.Series:
         long_ = (rsi > 50 + spec.rsi_band) & rising & (close > slow)
         short = (rsi < 50 - spec.rsi_band) & (~rising) & (close < slow)
 
+    elif spec.family == "macd_cross":
+        line, sig, _ = cache.macd()
+        crossed_up = (line > sig) & (line.shift(1) <= sig.shift(1))
+        crossed_down = (line < sig) & (line.shift(1) >= sig.shift(1))
+        slow = cache.ema(spec.slow)
+        long_ = crossed_up & (close > slow)
+        short = crossed_down & (close < slow)
+
+    elif spec.family == "stoch_cross":
+        k, d = cache.stochastic()
+        crossed_up = (k > d) & (k.shift(1) <= d.shift(1))
+        crossed_down = (k < d) & (k.shift(1) >= d.shift(1))
+        long_ = crossed_up & (k < 50 - spec.rsi_band / 2)     # cross from oversold
+        short = crossed_down & (k > 50 + spec.rsi_band / 2)
+
+    elif spec.family == "channel_fade":
+        upper, lower, _ = cache.donchian(spec.donchian)
+        calm = adx < spec.adx_min
+        long_ = (close <= lower) & calm
+        short = (close >= upper) & calm
+
+    elif spec.family == "session_breakout":
+        # Break of the recent range, taken only as the European session opens.
+        upper, lower, _ = cache.donchian(spec.donchian)
+        hour = pd.Series(close.index.hour, index=close.index)
+        opening = hour.between(7, 10)
+        long_ = (close > upper) & opening
+        short = (close < lower) & opening
+
+    elif spec.family == "pullback":
+        # Trend intact, momentum dipped and turned back: buy the retracement.
+        slow = cache.ema(spec.slow)
+        fast = cache.ema(spec.fast)
+        rsi = cache.rsi(spec.rsi_period)
+        turning_up = (rsi > rsi.shift(1)) & (rsi.shift(1) <= 50)
+        turning_down = (rsi < rsi.shift(1)) & (rsi.shift(1) >= 50)
+        long_ = (fast > slow) & (close > slow) & turning_up
+        short = (fast < slow) & (close < slow) & turning_down
+
+    elif spec.family == "squeeze":
+        # Volatility compressed, then released directionally.
+        _, upper, lower, width, _ = cache.bollinger(spec.bb_period, spec.bb_mult)
+        compressed = width.shift(1) <= width.shift(1).rolling(100, min_periods=50).quantile(0.25)
+        long_ = compressed & (close > upper)
+        short = compressed & (close < lower)
+
+    elif spec.family == "engulfing":
+        # Forex-adapted engulfing. The textbook pattern needs the open to gap
+        # past the previous close, which practically never happens on intraday
+        # FX bars: each bar opens where the last one closed. The condition that
+        # carries the same meaning here is a body that swallows the previous
+        # body and is decisively larger.
+        open_ = cache.bars["open"]
+        body = close - open_
+        prev_body = body.shift(1)
+        bigger = body.abs() > prev_body.abs()
+        engulf_up = (
+            (body > 0) & (prev_body < 0) & bigger
+            & (close >= open_.shift(1)) & (open_ <= close.shift(1))
+        )
+        engulf_down = (
+            (body < 0) & (prev_body > 0) & bigger
+            & (close <= open_.shift(1)) & (open_ >= close.shift(1))
+        )
+        slow = cache.ema(spec.slow)
+        long_ = engulf_up & (close > slow)
+        short = engulf_down & (close < slow)
+
     else:
         raise ValueError(f"unknown strategy family: {spec.family}")
+
+    long_, short = _apply_entry_filter(spec, cache, long_, short)
 
     signal = pd.Series(0, index=close.index, dtype=int)
     signal[long_.fillna(False)] = 1
     signal[short.fillna(False)] = -1
     return signal
+
+
+def _apply_entry_filter(spec: StrategySpec, cache: IndicatorCache, long_, short):
+    """Context filters layered on top of a family's raw entry condition."""
+    if spec.entry_filter == "none":
+        return long_, short
+
+    close = cache.close
+    if spec.entry_filter in ("htf", "both"):
+        # Higher-timeframe agreement: four times the slow average.
+        htf = cache.ema(min(spec.slow * 4, 400))
+        long_ = long_ & (close > htf)
+        short = short & (close < htf)
+
+    if spec.entry_filter in ("vol", "both"):
+        # Skip dead markets and volatility spikes alike.
+        atr_ratio = cache.atr / cache.atr.rolling(100, min_periods=50).mean()
+        tradable = atr_ratio.between(0.7, 1.6)
+        long_ = long_ & tradable
+        short = short & tradable
+
+    return long_, short
 
 
 def signal_frame(spec: StrategySpec, cache: IndicatorCache) -> pd.DataFrame:
@@ -192,6 +318,9 @@ def spec_config(spec: StrategySpec, base: Config) -> Config:
     cfg.risk.min_reward_risk = min(cfg.risk.min_reward_risk, spec.reward_risk)
     cfg.risk.allowed_sessions = SESSION_SETS[spec.sessions]
     cfg.labels.max_holding_bars = spec.hold
+    exit_rules = EXIT_STYLES[spec.exit_style]
+    cfg.risk.breakeven_at_r = exit_rules["breakeven_at_r"]
+    cfg.risk.trail_atr_mult = exit_rules["trail_atr_mult"]
     return cfg
 
 
@@ -290,6 +419,8 @@ DEFAULT_GRID: Dict[str, Sequence] = {
     "tp_atr": (2.0, 3.0, 4.0, 5.0),
     "hold": (24, 48, 96),
     "sessions": ("all", "active", "overlap", "europe"),
+    "entry_filter": ENTRY_FILTERS,
+    "exit_style": tuple(EXIT_STYLES),
 }
 
 
