@@ -1,0 +1,25 @@
+-- strategy search --------------------------------------------------
+  candidates tested   4,000
+  search window       2015-01-05 -> 2018-02-23
+  holdout window      2018-03-01 -> 2019-11-04
+
+  best-of-N by luck   0.3519 Sharpe per trade
+  deflated Sharpe     50.4%  -> INDISTINGUISHABLE FROM LUCK
+
+                                                  strategy  trades  exp_R  sharpe    pf  ho_trades  ho_exp_R  ho_sharpe
+revert:f34/s80/rsi14±25/dc55/adx25/bb30x2/sl1.5tp3h96/acti      32  0.473   0.354 2.092         18    -0.041     -0.032
+revert:f20/s200/rsi14±25/dc55/adx25/bb30x2/sl2tp5h48/activ      31  0.496   0.349 2.311         16     0.068      0.051
+revert:f20/s120/rsi14±25/dc20/adx30/bb30x2.5/sl1.5tp3h24/a      63  0.437   0.340 2.108         38     0.186      0.151
+channel_fade:f12/s80/rsi14±15/dc55/adx25/bb14x1.8/sl2tp5h2     141  0.332   0.243 1.767         77     0.255      0.181
+channel_fade:f34/s120/rsi21±10/dc55/adx25/bb30x2.5/sl1.5tp     149  0.362   0.236 1.691         81     0.115      0.076
+revert:f8/s200/rsi21±15/dc15/adx25/bb14x2.5/sl1.5tp4h24/al      74  0.286   0.226 1.795         39     0.195      0.150
+channel_fade:f20/s120/rsi7±10/dc55/adx25/bb14x1.8/sl1.5tp3     381  0.297   0.226 1.615        177     0.029      0.023
+revert:f12/s200/rsi14±25/dc55/adx30/bb20x2/sl2tp4h96/activ      61  0.232   0.225 1.719         31    -0.006     -0.006
+revert:f34/s200/rsi7±10/dc55/adx25/bb30x2/sl1tp2h48/active      38  0.247   0.219 1.685         24    -0.172     -0.154
+channel_fade:f20/s120/rsi7±20/dc55/adx20/bb14x1.8/sl2tp5h2      44  0.288   0.217 1.640         18    -0.006     -0.004
+revert:f34/s120/rsi14±10/dc40/adx20/bb14x1.8/sl1tp2h48/all      31  0.235   0.200 1.578         15    -0.405     -0.442
+channel_fade:f8/s200/rsi14±25/dc55/adx25/bb14x2.5/sl1.5tp3     356  0.201   0.187 1.573        175     0.033      0.031
+
+  finalists still positive on the holdout: 7/12
+  No winner. Either the deflated Sharpe says luck, or the finalists
+  died on the holdout. This is the normal outcome and it saved you money.
