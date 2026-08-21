@@ -1,1 +1,2 @@
 {"ts": "2026-08-21T05:25:26+00:00", "kind": "start", "bar": "2026-08-21 05:00:00+00:00", "equity": 10000.0, "detail": "cold start: watching from the most recent closed bar"}
+{"ts": "2026-08-21T06:59:26+00:00", "kind": "signal", "bar": "2026-08-21 06:00:00+00:00", "action": "BUY", "confidence": 0.3584, "lift": 1.119, "score": 0.2259, "approved": false, "lots": 0.0, "entry": null, "stop_loss": null, "take_profit": null, "detail": "will fill at the next bar open"}
