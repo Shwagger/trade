@@ -1,0 +1,20 @@
+{
+  "symbol": "EURUSD",
+  "equity": 10000.0,
+  "peak_equity": 10000.0,
+  "last_bar": "2026-08-21 05:00:00+00:00",
+  "last_trained_bar": null,
+  "bars_since_train": 1,
+  "position": null,
+  "pending": null,
+  "risk": {
+    "day_start_equity": 10000.0,
+    "current_day": "2026-08-21",
+    "consecutive_losses": 0,
+    "cooldown_left": 0,
+    "halted": false,
+    "halt_reason": ""
+  },
+  "closed_trades": [],
+  "started_at": "2026-08-21T05:25:26.270044+00:00"
+}
