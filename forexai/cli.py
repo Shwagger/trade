@@ -234,17 +234,11 @@ def cmd_monitor(args: argparse.Namespace) -> int:
             )
             return 1
         message = format_test(cfg.instrument.symbol, cfg.data.timeframe)
-        if telegram.send(message):
+        delivered, detail = telegram.deliver(message)
+        if delivered:
             print("test alert delivered - check your phone")
             return 0
-        print(
-            "test alert NOT delivered.\n"
-            "  - is TELEGRAM_BOT_TOKEN the current token? (BotFather /revoke "
-            "invalidates the old one)\n"
-            "  - is TELEGRAM_CHAT_ID your chat id, and did you message the bot "
-            "at least once?",
-            file=sys.stderr,
-        )
+        print(f"test alert NOT delivered.\n\nTelegram said: {detail}", file=sys.stderr)
         return 1
 
     backtest_expectancy = _latest_bootstrap()

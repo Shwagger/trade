@@ -216,3 +216,94 @@ def test_console_fallback_cannot_stand_in_for_a_telegram_test(monkeypatch, capsy
     )
     assert main(["monitor", "--test-alert"]) == 1        # no credentials, refuses
     assert "cannot test" in capsys.readouterr().err
+
+
+# ----------------------------------------------------------------------
+# diagnosing a refused delivery
+# ----------------------------------------------------------------------
+import io  # noqa: E402
+import json as _json  # noqa: E402
+import urllib.error  # noqa: E402
+
+
+class _Response:
+    def __init__(self, payload):
+        self._payload = _json.dumps(payload).encode()
+
+    def read(self):
+        return self._payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def _notifier():
+    return TelegramNotifier(token="123456789:AAtest", chat_id="42")
+
+
+def test_a_successful_delivery_is_reported_as_such(monkeypatch):
+    monkeypatch.setattr(
+        "urllib.request.urlopen", lambda *a, **k: _Response({"ok": True, "result": {}})
+    )
+    ok, detail = _notifier().deliver("hello")
+    assert ok and detail == "delivered"
+
+
+def test_a_revoked_token_is_named_as_the_cause(monkeypatch):
+    """The most likely failure after following the security advice."""
+    def raise_401(*args, **kwargs):
+        raise urllib.error.HTTPError(
+            url="https://api.telegram.org", code=401, msg="Unauthorized", hdrs=None,
+            fp=io.BytesIO(_json.dumps(
+                {"ok": False, "error_code": 401, "description": "Unauthorized"}
+            ).encode()),
+        )
+
+    monkeypatch.setattr("urllib.request.urlopen", raise_401)
+    ok, detail = _notifier().deliver("hello")
+    assert not ok
+    assert "401" in detail
+    assert "revoked" in detail and "TELEGRAM_BOT_TOKEN" in detail
+
+
+def test_never_having_messaged_the_bot_is_named_as_the_cause(monkeypatch):
+    def raise_400(*args, **kwargs):
+        raise urllib.error.HTTPError(
+            url="https://api.telegram.org", code=400, msg="Bad Request", hdrs=None,
+            fp=io.BytesIO(_json.dumps(
+                {"ok": False, "error_code": 400,
+                 "description": "Bad Request: chat not found"}
+            ).encode()),
+        )
+
+    monkeypatch.setattr("urllib.request.urlopen", raise_400)
+    ok, detail = _notifier().deliver("hello")
+    assert not ok
+    assert "chat not found" in detail
+    assert "cannot open a conversation" in detail
+
+
+def test_a_blocked_bot_is_named_as_the_cause(monkeypatch):
+    ok = TelegramNotifier.explain(
+        {"error_code": 403, "description": "Forbidden: bot was blocked by the user"}
+    )
+    assert "blocked" in ok and "Start" in ok
+
+
+def test_a_network_failure_is_not_confused_with_a_bad_token(monkeypatch):
+    def unreachable(*args, **kwargs):
+        raise urllib.error.URLError("no route to host")
+
+    monkeypatch.setattr("urllib.request.urlopen", unreachable)
+    ok, detail = _notifier().deliver("hello")
+    assert not ok
+    assert "could not reach api.telegram.org" in detail
+    assert "token" not in detail.lower(), "a dead network must not be blamed on the token"
+
+
+def test_send_still_returns_a_plain_boolean(monkeypatch):
+    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: _Response({"ok": True}))
+    assert _notifier().send("hello") is True

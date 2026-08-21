@@ -207,10 +207,57 @@ class TelegramNotifier:
             missing.append("TELEGRAM_CHAT_ID")
         return f"telegram: off - set {' and '.join(missing)} (see forexai/notify.py)"
 
-    def send(self, text: str) -> bool:
-        """Deliver one message. Returns success; never raises."""
+    @staticmethod
+    def explain(body: dict, status: int | None = None) -> str:
+        """Turn Telegram's refusal into the thing to actually go and fix."""
+        code = int(body.get("error_code") or status or 0)
+        description = str(body.get("description") or "").strip()
+        detail = f"{code} {description}".strip() or "unknown error"
+
+        if code == 401:
+            return (
+                f"{detail}\n"
+                "  -> The token is not valid. Most often it was revoked: asking\n"
+                "     BotFather for /revoke kills the previous token instantly,\n"
+                "     so a secret holding the old one stops working.\n"
+                "     Fix: BotFather -> /mybots -> your bot -> API Token, then\n"
+                "     paste THAT value into the TELEGRAM_BOT_TOKEN secret."
+            )
+        if code == 404:
+            return (
+                f"{detail}\n"
+                "  -> The token is malformed. It must look like 123456789:AA...\n"
+                "     with the numeric part, the colon and the long part, and no\n"
+                "     spaces or newlines around it."
+            )
+        if "chat not found" in description.lower():
+            return (
+                f"{detail}\n"
+                "  -> The chat id is wrong, or you have never written to the bot.\n"
+                "     A bot cannot open a conversation: send it any message from\n"
+                "     Telegram first, then read the id from\n"
+                "     https://api.telegram.org/bot<TOKEN>/getUpdates"
+            )
+        if code == 403:
+            return (
+                f"{detail}\n"
+                "  -> The bot is blocked or was never started. Open the chat in\n"
+                "     Telegram and press Start (or unblock it)."
+            )
+        if code == 429:
+            return f"{detail}\n  -> Rate limited by Telegram. Wait and retry."
+        return detail
+
+    def deliver(self, text: str) -> tuple[bool, str]:
+        """Send, and say precisely why if it did not work. Never raises.
+
+        ``send`` returns only a boolean, which is all the watcher needs; when a
+        human is debugging their setup, the boolean is useless and Telegram's
+        own error message is the whole answer.
+        """
         if not self.enabled:
-            return False
+            return False, self.describe()
+
         payload = json.dumps(
             {
                 "chat_id": self.chat_id,
@@ -219,18 +266,32 @@ class TelegramNotifier:
                 "disable_web_page_preview": True,
             }
         ).encode()
+        request = urllib.request.Request(
+            self.endpoint.format(token=self.token),
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
         try:
-            request = urllib.request.Request(
-                self.endpoint.format(token=self.token),
-                data=payload,
-                headers={"Content-Type": "application/json"},
-            )
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 body = json.loads(response.read().decode())
-            return bool(body.get("ok"))
-        except (urllib.error.URLError, urllib.error.HTTPError, OSError,
-                TimeoutError, json.JSONDecodeError, ValueError):
-            return False
+            if body.get("ok"):
+                return True, "delivered"
+            return False, self.explain(body)
+        except urllib.error.HTTPError as exc:
+            # Telegram puts the reason in the body even on a 4xx.
+            try:
+                body = json.loads(exc.read().decode())
+            except (OSError, ValueError):
+                body = {}
+            return False, self.explain(body, status=exc.code)
+        except (urllib.error.URLError, TimeoutError) as exc:
+            return False, f"could not reach api.telegram.org: {exc}"
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            return False, f"unexpected failure talking to Telegram: {exc}"
+
+    def send(self, text: str) -> bool:
+        """Deliver one message. Returns success; never raises."""
+        return self.deliver(text)[0]
 
 
 @dataclass

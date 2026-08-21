@@ -42,7 +42,7 @@ bash scripts/setup_mac.sh
 ```
 
 C'est tout. Le script trouve ton Python, crée l'environnement, installe les
-dépendances, lance les 171 tests, télécharge de vraies barres EURUSD, fait
+dépendances, lance les 177 tests, télécharge de vraies barres EURUSD, fait
 tourner la validation, entraîne le modèle et te montre une alerte réelle.
 
 Deux pièges macOS qu'il gère à ta place :
@@ -367,6 +367,18 @@ Sans les variables, les alertes tombent dans la console au lieu de se perdre.
 Et si Telegram est en panne, le monitor continue de surveiller : une alerte
 ratée est journalisée, elle n'arrête jamais le processus.
 
+### Quand le test échoue
+
+`monitor --test-alert` ne se contente pas de dire non : il te rend la raison
+exacte que Telegram a renvoyée, et quoi faire.
+
+| Telegram dit | Cause | Correctif |
+|---|---|---|
+| `401 Unauthorized` | token invalide — le plus souvent **révoqué** : un `/revoke` tue l'ancien token à la seconde | BotFather → `/mybots` → ton bot → *API Token*, et colle **cette** valeur dans le secret |
+| `400 chat not found` | mauvais chat id, ou tu n'as **jamais écrit au bot** — un bot ne peut pas ouvrir une conversation | écris-lui un message, puis relis l'id sur `getUpdates` |
+| `403 bot was blocked` | bot bloqué ou jamais démarré | ouvre la conversation et appuie sur **Start** |
+| `could not reach api.telegram.org` | réseau | ce n'est pas ton token — réessaie |
+
 ---
 
 ## Le faire tourner 24/7 sans laisser ton Mac allumé
@@ -504,7 +516,7 @@ un danger structurel, il ne peut jamais en créer un ni l'agrandir. Ollama
 python -m pytest tests/ -q
 ```
 
-171 tests. Les plus importants :
+177 tests. Les plus importants :
 
 * `test_no_lookahead.py` — tronquer ou corrompre le futur ne doit changer
   **aucune** valeur de feature passée. Si ce test tombe, tout le reste est un
