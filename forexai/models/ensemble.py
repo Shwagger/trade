@@ -89,6 +89,7 @@ class EnsembleReport:
     n_calibration: int
     class_counts: Dict[int, int]
     fitted: List[str]
+    priors: Dict[int, float]
 
 
 class MLEnsemble:
@@ -100,6 +101,10 @@ class MLEnsemble:
         self.weights: Dict[str, float] = {}
         self.feature_names: List[str] = []
         self.classes_ = np.array(CLASSES)
+        # Base rate of each class in the training window. Probabilities are
+        # only interpretable relative to these: 20% confidence is impressive
+        # when the base rate is 13%, and worthless when it is 33%.
+        self.priors_: Dict[int, float] = {c: 1.0 / len(CLASSES) for c in CLASSES}
         self.report: EnsembleReport | None = None
 
     # ------------------------------------------------------------------
@@ -143,11 +148,15 @@ class MLEnsemble:
             raise ValueError("no model has a positive ensemble weight")
         self.weights = {k: v / total for k, v in self.weights.items()}
 
+        self.priors_ = {
+            int(c): float(max((y_arr == c).mean(), 1e-6)) for c in CLASSES
+        }
         self.report = EnsembleReport(
             n_train=len(X_base),
             n_calibration=int(n_cal),
             class_counts={int(c): int((y_arr == c).sum()) for c in CLASSES},
             fitted=fitted,
+            priors={k: round(v, 4) for k, v in self.priors_.items()},
         )
         return self
 
@@ -172,10 +181,26 @@ class MLEnsemble:
         )
 
     def directional_score(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Signed edge in [-1, 1] plus the winning-side probability."""
+        """Directional edge, winning-side probability, and its lift.
+
+        ``score`` is normalised by the directional mass rather than taken raw,
+        so it means the same thing whether 30% or 70% of the training bars
+        resolved into a trade. A raw ``p_long - p_short`` silently shrinks
+        towards zero as the no-trade class grows, which on daily bars is
+        enough to freeze the system without a single error message.
+
+        ``lift`` is the winning-side probability divided by that class's
+        training base rate: how much better than a coin weighted by the
+        priors this particular bar looks.
+        """
         proba = self.predict_proba(X)
-        proba["score"] = proba["p_long"] - proba["p_short"]
+        directional = (proba["p_long"] + proba["p_short"]).clip(lower=1e-9)
+        proba["score"] = (proba["p_long"] - proba["p_short"]) / directional
         proba["confidence"] = proba[["p_long", "p_short"]].max(axis=1)
+
+        long_side = proba["p_long"] >= proba["p_short"]
+        win_prior = np.where(long_side, self.priors_[1], self.priors_[-1])
+        proba["lift"] = proba["confidence"] / np.clip(win_prior, 1e-9, None)
         return proba
 
     # ------------------------------------------------------------------

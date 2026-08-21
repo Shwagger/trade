@@ -32,21 +32,30 @@ class Dataset:
     labels: pd.DataFrame
     technical: pd.DataFrame
     feature_names: list
+    # Row masks are pure functions of the frames above and are asked for once
+    # per bar by the live monitor, so they are computed once and kept.
+    _trainable: Optional[pd.Index] = None
+    _predictable: Optional[pd.Index] = None
 
     @property
     def atr(self) -> pd.Series:
         return self.features["atr"]
 
+    def _complete_rows(self) -> pd.Series:
+        return self.features[self.feature_names].notna().all(axis=1)
+
     def trainable(self) -> pd.Index:
         """Rows with complete features *and* a resolved label."""
-        ok = self.features[self.feature_names].notna().all(axis=1)
-        ok &= self.labels["label"].notna()
-        return self.features.index[ok]
+        if self._trainable is None:
+            ok = self._complete_rows() & self.labels["label"].notna()
+            self._trainable = self.features.index[ok]
+        return self._trainable
 
     def predictable(self) -> pd.Index:
         """Rows with complete features (labels not required)."""
-        ok = self.features[self.feature_names].notna().all(axis=1)
-        return self.features.index[ok]
+        if self._predictable is None:
+            self._predictable = self.features.index[self._complete_rows()]
+        return self._predictable
 
 
 def build_dataset(bars: pd.DataFrame, cfg: Config) -> Dataset:

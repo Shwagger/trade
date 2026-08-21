@@ -1,5 +1,6 @@
 """Command line interface.
 
+    python -m forexai fetch --symbol EURUSD --timeframe 1h   # download real bars
     python -m forexai walkforward --bars 20000        # full validation + report
     python -m forexai backtest --source csv --path data/raw/EURUSD_H1.csv
     python -m forexai train                           # fit and save the model
@@ -10,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,7 +22,12 @@ import pandas as pd
 from . import __version__
 from .config import Config
 from .data.sources import load_market_data
-from .metrics import bootstrap_expectancy, compute_metrics, format_metrics
+from .metrics import (
+    bootstrap_expectancy,
+    compute_metrics,
+    format_metrics,
+    infer_bars_per_year,
+)
 from .pipeline import build_dataset, fit_model, make_signals, run_backtest
 from .report import render, save, verdict
 from .risk import RiskManager
@@ -80,6 +87,157 @@ def cmd_data(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_fetch(args: argparse.Namespace) -> int:
+    """Download real bars so nobody has to export anything by hand."""
+    from .data.download import DownloadError, fetch, save_csv
+
+    symbol = (args.symbol or "EURUSD").upper()
+    timeframe = args.timeframe
+    out = args.out or f"data/raw/{symbol}_{timeframe.upper()}.csv"
+
+    print(f"downloading {symbol} {timeframe} (provider={args.provider}) ...")
+    try:
+        bars, provider = fetch(symbol, timeframe, args.years, args.provider)
+    except DownloadError as exc:
+        print(f"\ndownload failed:\n  {exc}", file=sys.stderr)
+        return 1
+
+    path = save_csv(bars, out)
+    span_days = (bars.index[-1] - bars.index[0]).days
+    print(
+        f"\n{len(bars):,} bars from {provider}  "
+        f"{bars.index[0]:%Y-%m-%d} -> {bars.index[-1]:%Y-%m-%d}  ({span_days} days)"
+    )
+    print(f"saved to {path}")
+
+    if len(bars) < 5_000:
+        print(
+            f"\nWARNING: {len(bars):,} bars is thin. Walk-forward needs a training\n"
+            "         window plus several forward windows; under ~5 000 bars you get\n"
+            "         one or two folds and no statistical power. Use --timeframe 1d\n"
+            "         for decades of history, or export H1 from your broker."
+        )
+    print(f"\nnext:\n  python -m forexai walkforward --source csv --path {path}")
+    return 0
+
+
+def cmd_search(args: argparse.Namespace) -> int:
+    """Test thousands of rule sets, then try to disqualify the winner."""
+    from .search import format_search, grid_size, search_strategies
+
+    cfg = _load_config(args)
+    bars = _load_data(cfg)
+    print(f"\nsearch space: {grid_size():,} combinations")
+
+    result = search_strategies(
+        bars, cfg,
+        n_specs=args.n, top_k=args.top, holdout_fraction=args.holdout,
+        min_trades=args.min_trades, seed=args.search_seed, jobs=args.jobs,
+    )
+    print()
+    print(format_search(result))
+
+    if not args.no_save:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        out = Path("runs") / f"search-{stamp}"
+        out.mkdir(parents=True, exist_ok=True)
+        table = result.table.drop(columns=["spec"], errors="ignore")
+        table.to_csv(out / "all_candidates.csv", index=False)
+        if not result.finalists.empty:
+            result.finalists.drop(columns=["spec"], errors="ignore").to_csv(
+                out / "finalists.csv", index=False
+            )
+        (out / "search.txt").write_text(format_search(result))
+        cfg.dump(out / "config.yaml")
+        print(f"\nartefacts written to {out}/")
+
+    print(
+        "\nRemember what this number is: the best of "
+        f"{result.n_tested:,} tries. The deflated Sharpe above already accounts\n"
+        "for that; the holdout columns are the real evidence. A strategy that wins\n"
+        "the search and dies on the holdout is the search working, not failing."
+    )
+    return 0 if result.winner is not None else 2
+
+
+def cmd_monitor(args: argparse.Namespace) -> int:
+    """Watch the market bar by bar, on paper, and score itself as it goes."""
+    import time
+
+    from .monitor import Monitor
+
+    blob = _load_model()
+    if blob is None:
+        return 1
+    cfg = Config.from_dict(blob["config"])
+    for attr in ("source", "path", "bars"):
+        value = getattr(args, attr, None)
+        if value:
+            setattr(cfg.data, attr, value)
+            if attr == "path":
+                cfg.data.source = "csv"
+
+    backtest_expectancy = _latest_bootstrap()
+    monitor = Monitor(
+        cfg, blob["model"], workdir=args.workdir,
+        retrain_every=args.retrain_every,
+        backtest_expectancy=backtest_expectancy,
+    )
+    if backtest_expectancy:
+        print(
+            f"drift reference: backtest expectancy "
+            f"{backtest_expectancy.get('mean_r', 0):+.4f} R "
+            f"(CI low {backtest_expectancy.get('ci_low', float('nan')):+.4f})"
+        )
+    else:
+        print(
+            "no walk-forward report found in runs/ - drift alerts are disabled.\n"
+            "Run  python -m forexai walkforward  first to give the monitor a "
+            "yardstick."
+        )
+
+    iterations = args.iterations if args.iterations > 0 else None
+    count = 0
+    while iterations is None or count < iterations:
+        count += 1
+        try:
+            bars = load_market_data(cfg.data, cfg.instrument.symbol)
+        except Exception as exc:                       # a feed hiccup is not fatal
+            print(f"[{count}] data unavailable: {exc}")
+            if args.interval <= 0:
+                return 1
+            time.sleep(args.interval)
+            continue
+
+        events = monitor.step(bars)
+        stamp = datetime.now(timezone.utc).strftime("%H:%M:%S")
+        if events:
+            for event in events:
+                detail = {k: v for k, v in event.items() if k not in ("ts", "kind")}
+                print(f"[{stamp}] {event['kind']:<14} {detail}")
+        else:
+            print(f"[{stamp}] no new closed bar")
+
+        if args.interval <= 0:
+            break
+        time.sleep(args.interval)
+
+    print()
+    print(monitor.summary())
+    return 0
+
+
+def _latest_bootstrap() -> dict:
+    """Pull the expectancy confidence interval from the newest walk-forward run."""
+    runs = sorted(Path("runs").glob("*/summary.json"))
+    if not runs:
+        return {}
+    try:
+        return json.loads(runs[-1].read_text()).get("bootstrap", {})
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
 def cmd_walkforward(args: argparse.Namespace) -> int:
     cfg = _load_config(args)
     bars = _load_data(cfg)
@@ -120,7 +278,10 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     model = fit_model(ds, train_idx, cfg)
     signals = make_signals(model, ds, test_idx, cfg)
     result = run_backtest(ds, signals, test_idx, cfg)
-    metrics = compute_metrics(result.trades, result.equity, cfg.initial_equity)
+    metrics = compute_metrics(
+        result.trades, result.equity, cfg.initial_equity,
+        bars_per_year=infer_bars_per_year(test_idx),
+    )
 
     print("\nout-of-sample result:")
     print(format_metrics(metrics))
@@ -259,7 +420,14 @@ def cmd_paper(args: argparse.Namespace) -> int:
                 "exit_reason", "pnl", "r_multiple", "equity_after"]
         print(result.trades[cols].to_string(index=False))
         print()
-        print(format_metrics(compute_metrics(result.trades, result.equity, cfg.initial_equity)))
+        print(
+            format_metrics(
+                compute_metrics(
+                    result.trades, result.equity, cfg.initial_equity,
+                    bars_per_year=infer_bars_per_year(idx),
+                )
+            )
+        )
     if result.rejections:
         print("\nvetoes:")
         for reason, count in sorted(result.rejections.items(), key=lambda kv: -kv[1]):
@@ -295,6 +463,13 @@ def build_parser() -> argparse.ArgumentParser:
     dt = sub.add_parser("data", help="load and describe the market data", parents=[common])
     dt.set_defaults(func=cmd_data)
 
+    fe = sub.add_parser("fetch", help="download real bars to a CSV", parents=[common])
+    fe.add_argument("--timeframe", default="1h", choices=["1h", "1d", "30m", "15m", "5m"])
+    fe.add_argument("--years", type=float, default=2.0, help="how much history to ask for")
+    fe.add_argument("--provider", default="auto", choices=["auto", "yahoo", "stooq"])
+    fe.add_argument("--out", help="destination CSV (default data/raw/<SYMBOL>_<TF>.csv)")
+    fe.set_defaults(func=cmd_fetch)
+
     wf = sub.add_parser(
         "walkforward", aliases=["wf"], help="rolling out-of-sample validation", parents=[common]
     )
@@ -312,6 +487,29 @@ def build_parser() -> argparse.ArgumentParser:
     sg.add_argument("--llm", action="store_true", help="ask the local LLM for a risk review")
     sg.add_argument("--llm-model", default="llama3.2:3b")
     sg.set_defaults(func=cmd_signal)
+
+    se = sub.add_parser(
+        "search", help="test thousands of rule strategies against a holdout", parents=[common]
+    )
+    se.add_argument("--n", type=int, default=2_000, help="candidates to sample")
+    se.add_argument("--top", type=int, default=10, help="finalists taken to the holdout")
+    se.add_argument("--holdout", type=float, default=0.35, help="fraction held back")
+    se.add_argument("--min-trades", type=int, default=30)
+    se.add_argument("--search-seed", type=int, default=0)
+    se.add_argument("--jobs", type=int, default=1, help="parallel workers")
+    se.add_argument("--no-save", action="store_true")
+    se.set_defaults(func=cmd_search)
+
+    mo = sub.add_parser(
+        "monitor", help="watch the market on paper and score the model live", parents=[common]
+    )
+    mo.add_argument("--interval", type=float, default=0.0,
+                    help="seconds between checks; 0 runs a single pass (use with cron)")
+    mo.add_argument("--iterations", type=int, default=0, help="0 = run until stopped")
+    mo.add_argument("--retrain-every", type=int, default=500,
+                    help="bars between refits; 0 disables retraining")
+    mo.add_argument("--workdir", default="runs/monitor")
+    mo.set_defaults(func=cmd_monitor)
 
     pp = sub.add_parser("paper", help="dry-run replay of recent bars", parents=[common])
     pp.add_argument("--window", type=int, default=500, dest="replay_bars",

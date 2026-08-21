@@ -66,8 +66,9 @@ class SignalConfig:
 
     ml_weight: float = 0.65
     technical_weight: float = 0.35
-    min_score: float = 0.12             # |fused score| needed to act at all
-    min_confidence: float = 0.40        # directional probability floor
+    min_score: float = 0.15             # |fused score| needed to act at all
+    min_confidence_lift: float = 1.10   # winning-side probability vs its base rate
+    min_confidence: float = 0.0         # absolute probability floor; 0 disables it
     require_agreement: bool = True      # both heads must point the same way
 
 

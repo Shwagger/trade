@@ -46,12 +46,29 @@ un fold complet (6 000 barres d'entraînement) prend quelques secondes.
 
 ## Démarrage en 30 secondes
 
+Copie **une ligne à la fois**. Ne colle jamais un bloc contenant des commentaires
+`#` dans zsh : par défaut le shell macOS ne les reconnaît pas et te renvoie
+`zsh: parse error near ')'`.
+
 ```bash
-python -m forexai walkforward --bars 40000        # validation complète + rapport
-python -m forexai train                           # entraîne et sauvegarde le modèle
-python -m forexai signal                          # décision sur la dernière bougie fermée
-python -m forexai paper --window 500              # rejeu à blanc, aucun ordre envoyé
+python -m forexai fetch --symbol EURUSD --timeframe 1h
+python -m forexai walkforward --source csv --path data/raw/EURUSD_1H.csv
+python -m forexai train --source csv --path data/raw/EURUSD_1H.csv
+python -m forexai signal
+python -m forexai search --n 3000 --jobs 4
+python -m forexai monitor --interval 300
 ```
+
+| commande | ce qu'elle fait |
+|---|---|
+| `fetch` | télécharge de vraies barres (Yahoo H1, Stooq D1), sans clé d'API |
+| `walkforward` | validation out-of-sample glissante + rapport + verdict |
+| `backtest` | un seul split train/test, plus rapide |
+| `train` | entraîne sur tout l'historique et sauvegarde le modèle |
+| `signal` | décision sur la dernière bougie fermée |
+| `search` | teste des milliers de stratégies contre un holdout |
+| `monitor` | surveille le marché en papier et se note en continu |
+| `paper` | rejeu à blanc des dernières barres |
 
 Par défaut les données sont **synthétiques**. Elles valident la mécanique, pas
 un edge. Pour du sérieux, il faut de vraies barres (section suivante).
@@ -60,20 +77,28 @@ un edge. Pour du sérieux, il faut de vraies barres (section suivante).
 
 ## Mettre de vraies données
 
-1. Exporte de l'H1 EURUSD depuis MT5 (`Outils → Centre d'historique → Exporter`)
-   ou Dukascopy (Historical Data Feed, CSV, **UTC**). Vise 3 ans minimum.
-2. Pose le fichier dans `data/raw/EURUSD_H1.csv`.
-3. Édite `config/eurusd_h1_real.yaml` — surtout le bloc `costs`, avec le spread
-   et la commission **réels** de ton courtier.
-4. Lance :
+**Le plus simple — rien à exporter à la main :**
 
 ```bash
-python -m forexai walkforward --config config/eurusd_h1_real.yaml
+python -m forexai fetch --symbol EURUSD --timeframe 1h --years 2
 ```
 
-Alternative sans fichier, si tu as le réseau : `pip install yfinance` puis
-`--source yahoo` (H1 limité à ~730 jours, suffisant pour un premier coup d'œil,
-pas pour valider).
+Yahoo, sans clé d'API, sans dépendance en plus. ~12 000 barres H1 (Yahoo plafonne
+l'intraday à 730 jours). Pour des décennies d'historique :
+
+```bash
+python -m forexai fetch --symbol EURUSD --timeframe 1d --provider stooq
+python -m forexai walkforward --config config/eurusd_d1_real.yaml
+```
+
+**Le plus sérieux — l'export de ton propre courtier**, parce que c'est chez lui
+que tu vas trader et que ses prix et ses frais sont les seuls qui comptent :
+
+1. MT5 → `Outils → Centre d'historique → Exporter`, ou Dukascopy (CSV, **UTC**).
+2. Fichier dans `data/raw/EURUSD_H1.csv`.
+3. Dans `config/eurusd_h1_real.yaml`, mets le **vrai** spread et la **vraie**
+   commission de ton compte.
+4. `python -m forexai walkforward --config config/eurusd_h1_real.yaml`
 
 ---
 
@@ -109,9 +134,19 @@ ou en panique.
 Trois filtres avant d'engager un centime :
 1. les deux têtes ne doivent pas se contredire,
 2. l'edge fusionné doit dépasser `min_score`,
-3. la probabilité du côté gagnant doit dépasser `min_confidence`.
+3. la probabilité du côté gagnant doit battre **sa propre fréquence de base**
+   d'au moins `min_confidence_lift`.
 
-Tout le reste devient **WAIT**. La majorité des bougies doivent être WAIT.
+Le point 3 mérite une explication, parce qu'un seuil absolu était un bug réel
+dans la v1 de ce dépôt : en H1 les trois classes pèsent ~33 % chacune, en daily
+la classe « aucun trade » monte à 73 %. Une probabilité de 20 % vaut donc « deux
+fois mieux que le hasard » en daily et « nettement sous le hasard » en H1. Un
+seuil fixe à 0,40 gelait tout le système en daily **sans un seul message
+d'erreur**. Le seuil est maintenant relatif à ce que le modèle a réellement vu
+à l'entraînement.
+
+Tout le reste devient **WAIT**. La majorité des bougies doivent être WAIT, et le
+rapport te dit exactement quel filtre a bloqué quoi.
 
 ### `risk.py` — le patron
 La couche signal ne fait que *proposer*. C'est ici qu'on décide, et c'est ici
@@ -162,10 +197,16 @@ Chaque fold rapporte l'**in-sample** et l'**out-of-sample** côte à côte. Un g
 ## Lire le rapport
 
 ```
-expectancy          +0.0933 R
-mean +0.0933 R  95% CI [-0.0005, +0.1904]  P(edge > 0) = 97.5%
-[INFO] mean in-sample minus out-of-sample expectancy: +0.417 R (the model is memorising)
+expectancy          +0.0427 R
+mean +0.0427 R  95% CI [-0.0313, +0.1203]  P(edge > 0) = 86.1%
+[INFO] mean in-sample minus out-of-sample expectancy: +0.368 R (the model is memorising)
+verdict: NO-GO
 ```
+
+C'est le résultat réel du dépôt sur 40 000 barres synthétiques, 22 folds,
+1 084 trades. **NO-GO**, et c'est la bonne réponse : sur des données quasi
+efficientes, il n'y a pas d'edge à trouver, et le système le dit au lieu de
+l'inventer.
 
 * **Expectancy en R** — la seule métrique qui survit à un changement de taille
   de compte. 40 % de réussite à +2R vaut mieux que 70 % à -0,05R.
@@ -174,6 +215,84 @@ mean +0.0933 R  95% CI [-0.0005, +0.1904]  P(edge > 0) = 97.5%
 * **Écart IS − OOS** — au-delà de ~0,25 R, le modèle apprend le passé par cœur.
 
 Le verdict final n'est jamais « lance-toi » : au mieux c'est **GO TO DEMO**.
+
+---
+
+## Chercher des milliers de stratégies — sans se mentir
+
+```bash
+python -m forexai search --n 3000 --jobs 4
+```
+
+L'espace de recherche fait **15,9 millions de combinaisons** : 4 familles de
+règles (tendance, retour à la moyenne, cassure, momentum) × leurs périodes ×
+seuils × stops × cibles × durées × sessions. La commande en échantillonne
+plusieurs milliers et les backteste toutes, avec le même moteur de risque et les
+mêmes frais que le reste du système.
+
+Et surtout, elle te protège du piège qui a ruiné plus de comptes que n'importe
+quel krach : **si tu testes 3 000 stratégies sur un marché de pile ou face, la
+meilleure aura l'air excellente.** C'est de l'arithmétique, pas du talent.
+
+Deux défenses, non désactivables :
+
+1. **Un holdout que la recherche ne voit jamais.** Les données sont coupées en
+   deux *avant* la première stratégie générée. Tout est classé sur le segment de
+   recherche ; seuls les finalistes touchent le holdout, une seule fois.
+2. **Le Sharpe déflaté** (Bailey & López de Prado). Connaissant le nombre
+   d'essais et la dispersion de leurs résultats, on calcule ce que le
+   *meilleur sur N* obtiendrait **sans aucun edge**. Un gagnant qui ne passe pas
+   cette barre est du bruit bien coiffé.
+
+```
+  best-of-N by luck   0.3194 Sharpe per trade
+  deflated Sharpe     32.9%  -> INDISTINGUISHABLE FROM LUCK
+  No winner. Either the deflated Sharpe says luck, or the finalists
+  died on the holdout. This is the normal outcome and it saved you money.
+```
+
+Pas de gagnant est le résultat **normal**. Le jour où il y en a un, c'est là que
+ça devient intéressant.
+
+---
+
+## Surveiller le marché en continu
+
+```bash
+python -m forexai monitor --interval 300
+```
+
+Le monitor regarde chaque bougie se fermer, prend la décision, la journalise, et
+**se note lui-même** contre ce que le backtest avait promis.
+
+C'est volontairement un pont **papier** : il n'envoie jamais d'ordre. Parce que
+le chiffre qui dit si un système est réel, c'est l'écart entre l'espérance
+backtestée et l'espérance *en avant*, sur des barres que le modèle n'a jamais
+vues. Le monitor mesure cet écart en continu, gratuitement, sans capital exposé.
+Brancher un courtier avant de connaître cet écart, c'est comme ça que les
+comptes meurent.
+
+Sur chaque bougie fermée :
+
+1. il exécute l'ordre décidé à la bougie précédente, à l'open — jamais au close
+2. il gère la position ouverte avec **exactement** les règles de sortie du
+   backtester (fonction partagée, pas réécrite — un test vérifie que les deux
+   produisent les mêmes trades, au pip près)
+3. il décide sur la bougie qui vient de fermer
+4. il écrit tout dans `runs/monitor/<SYMBOL>/journal.jsonl`
+5. il **réentraîne** le modèle tous les `--retrain-every` barres
+6. il lève une **alerte de dérive** quand les résultats en avant sortent de
+   l'intervalle de confiance du backtest
+
+L'état (équité, position, cooldown, limite journalière, kill switch) est
+persisté sur disque : tuer le process et le relancer ne remet aucun garde-fou à
+zéro.
+
+Pour le faire tourner tout seul, une passe par heure via `cron` :
+
+```bash
+0 * * * * cd /chemin/vers/trade && .venv/bin/python -m forexai monitor --interval 0
+```
 
 ---
 
@@ -202,7 +321,7 @@ un danger structurel, il ne peut jamais en créer un ni l'agrandir. Ollama
 python -m pytest tests/ -q
 ```
 
-47 tests. Les plus importants :
+88 tests. Les plus importants :
 
 * `test_no_lookahead.py` — tronquer ou corrompre le futur ne doit changer
   **aucune** valeur de feature passée. Si ce test tombe, tout le reste est un
@@ -212,6 +331,12 @@ python -m pytest tests/ -q
   compte est trop petit pour respecter les 0,5 %.
 * `test_backtest.py` — entrée au prochain open, P&L exact au pip près, effet
   des frais, une position à la fois.
+* `test_monitor.py` — **le monitor live doit reproduire le backtest trade pour
+  trade.** S'ils divergent, tous les chiffres de recherche deviennent une
+  fiction. C'est ce test qui a attrapé un décalage d'une barre dans le comptage
+  de la durée de détention.
+* `test_search.py` — le holdout ne chevauche jamais la recherche, et le seuil de
+  chance monte bien avec le nombre d'essais.
 
 ---
 

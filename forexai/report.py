@@ -34,7 +34,9 @@ def verdict(result: WalkForwardResult) -> tuple[str, list[str]]:
     m, b = result.metrics, result.bootstrap
     notes: list[str] = []
     if not m or m.get("trades", 0) == 0:
-        return "NO-GO", ["no trades were taken - loosen the filters or check the data"]
+        why = max(result.signal_blocks.items(), key=lambda kv: kv[1], default=None)
+        detail = f" - every bar was blocked by: {why[0]}" if why else ""
+        return "NO-GO", [f"no trades were taken{detail}"]
 
     checks = {
         "positive out-of-sample expectancy": m.get("expectancy_r", 0.0) > 0.05,
@@ -109,6 +111,15 @@ def render(result: WalkForwardResult, cfg: Config, title: str = "FOREX AI v2") -
             lines.append(f"  {name:<18} {value:.4f}")
     else:
         lines.append("  (unavailable)")
+
+    if result.signal_blocks or result.rejections:
+        lines += ["", "-- why bars were not traded " + "-" * 41]
+        total_blocked = sum(result.signal_blocks.values())
+        for reason, count in sorted(result.signal_blocks.items(), key=lambda kv: -kv[1]):
+            share = 100.0 * count / total_blocked if total_blocked else 0.0
+            lines.append(f"  signal gate  {count:>8,}  ({share:4.1f}%)  {reason}")
+        for reason, count in sorted(result.rejections.items(), key=lambda kv: -kv[1]):
+            lines.append(f"  risk veto    {count:>8,}            {reason}")
 
     lines += ["", "-- verdict " + "-" * 58, f"  {label}", ""]
     lines += [f"  {n}" for n in notes]

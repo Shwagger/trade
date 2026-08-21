@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 
 from .config import Config
-from .metrics import bootstrap_expectancy, compute_metrics
+from .metrics import bootstrap_expectancy, compute_metrics, infer_bars_per_year
 from .pipeline import Dataset, fit_model, make_signals, run_backtest
 from .risk import RiskManager
 
@@ -42,6 +42,7 @@ class Fold:
     trades: pd.DataFrame
     equity: pd.Series
     rejections: Dict[str, int] = field(default_factory=dict)
+    signal_blocks: Dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -53,6 +54,8 @@ class WalkForwardResult:
     bootstrap: Dict[str, float]
     fold_table: pd.DataFrame
     importance: pd.Series
+    signal_blocks: Dict[str, int] = field(default_factory=dict)
+    rejections: Dict[str, int] = field(default_factory=dict)
 
 
 def walk_forward(ds: Dataset, cfg: Config, verbose: bool = True) -> WalkForwardResult:
@@ -60,6 +63,7 @@ def walk_forward(ds: Dataset, cfg: Config, verbose: bool = True) -> WalkForwardR
     index = ds.features.index
     n = len(index)
     embargo = max(wf.embargo_bars, cfg.labels.max_holding_bars)
+    bars_per_year = infer_bars_per_year(index)
 
     # One risk manager for the whole run: the account is continuous.
     rm = RiskManager(cfg.risk, cfg.instrument, cfg.costs, cfg.initial_equity)
@@ -87,16 +91,24 @@ def walk_forward(ds: Dataset, cfg: Config, verbose: bool = True) -> WalkForwardR
 
         # --- out-of-sample: the real thing --------------------------------
         oos_signals = make_signals(model, ds, test_idx, cfg)
+        blocks = (
+            oos_signals.loc[oos_signals["direction"] == 0, "reason"]
+            .value_counts().to_dict()
+            if not oos_signals.empty else {}
+        )
         oos_result = run_backtest(ds, oos_signals, test_idx, cfg, risk_manager=rm)
         oos_metrics = compute_metrics(
-            oos_result.trades, oos_result.equity, float(oos_result.equity.iloc[0])
+            oos_result.trades, oos_result.equity, float(oos_result.equity.iloc[0]),
+            bars_per_year=bars_per_year,
         )
 
         # --- in-sample: the same model on its own training data ------------
         is_signals = make_signals(model, ds, train_idx, cfg)
         is_rm = RiskManager(cfg.risk, cfg.instrument, cfg.costs, cfg.initial_equity)
         is_result = run_backtest(ds, is_signals, train_idx, cfg, risk_manager=is_rm)
-        is_metrics = compute_metrics(is_result.trades, is_result.equity, cfg.initial_equity)
+        is_metrics = compute_metrics(
+            is_result.trades, is_result.equity, cfg.initial_equity, bars_per_year=bars_per_year
+        )
 
         folds.append(
             Fold(
@@ -107,6 +119,7 @@ def walk_forward(ds: Dataset, cfg: Config, verbose: bool = True) -> WalkForwardR
                 oos=oos_metrics, is_=is_metrics,
                 trades=oos_result.trades, equity=oos_result.equity,
                 rejections=oos_result.rejections,
+                signal_blocks=blocks,
             )
         )
         if not oos_result.trades.empty:
@@ -124,6 +137,15 @@ def walk_forward(ds: Dataset, cfg: Config, verbose: bool = True) -> WalkForwardR
                 f"| IS exp {is_metrics.get('expectancy_r', 0):+.3f} R "
                 f"| equity {oos_metrics['final_equity']:,.0f}"
             )
+            if oos_metrics["trades"] == 0:
+                top = max(blocks.items(), key=lambda kv: kv[1], default=("no bars", 0))
+                worst_veto = max(
+                    oos_result.rejections.items(), key=lambda kv: kv[1], default=None
+                )
+                detail = f"signals blocked mostly by: {top[0]} ({top[1]} bars)"
+                if worst_veto:
+                    detail += f"; risk veto: {worst_veto[0]} ({worst_veto[1]}x)"
+                print(f"           no trade - {detail}")
         if rm.state.halted:
             if verbose:
                 print(f"  !! {rm.state.halt_reason} - walk-forward stopped")
@@ -138,7 +160,10 @@ def walk_forward(ds: Dataset, cfg: Config, verbose: bool = True) -> WalkForwardR
     equity = pd.concat(all_equity) if all_equity else pd.Series(dtype=float)
     equity = equity[~equity.index.duplicated(keep="last")].sort_index()
 
-    metrics = compute_metrics(trades, equity, cfg.initial_equity) if len(equity) else {}
+    metrics = (
+        compute_metrics(trades, equity, cfg.initial_equity, bars_per_year=bars_per_year)
+        if len(equity) else {}
+    )
     boot = bootstrap_expectancy(trades) if len(trades) else {}
 
     rows = [
@@ -163,7 +188,16 @@ def walk_forward(ds: Dataset, cfg: Config, verbose: bool = True) -> WalkForwardR
         if importances
         else pd.Series(dtype=float)
     )
+    blocks: Dict[str, int] = {}
+    vetoes: Dict[str, int] = {}
+    for f in folds:
+        for key, count in f.signal_blocks.items():
+            blocks[key] = blocks.get(key, 0) + int(count)
+        for key, count in f.rejections.items():
+            vetoes[key] = vetoes.get(key, 0) + int(count)
+
     return WalkForwardResult(
         folds=folds, trades=trades, equity=equity, metrics=metrics,
         bootstrap=boot, fold_table=fold_table, importance=importance,
+        signal_blocks=blocks, rejections=vetoes,
     )

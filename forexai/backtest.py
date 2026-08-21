@@ -33,6 +33,43 @@ from .risk import RiskManager, TradePlan
 ROLLOVER_HOUR = 22  # UTC
 
 
+def resolve_exit(
+    direction: int,
+    stop_loss: float,
+    take_profit: float,
+    high: float,
+    low: float,
+    close: float,
+    half_spread: float,
+    slippage: float,
+    timed_out: bool,
+) -> tuple[Optional[float], str]:
+    """Decide whether an open position leaves on this bar, and at what price.
+
+    Shared by the backtester and the live monitor so the two can never drift
+    apart: a rule changed here changes both, and ``test_monitor.py`` asserts
+    they still agree bar for bar.
+
+    Exits execute on the far side of the spread (bid for a long, ask for a
+    short). Stops slip, limits do not. A bar that spans both barriers is
+    resolved as a stop, because OHLC data cannot say which came first.
+    """
+    if direction > 0:
+        if low - half_spread <= stop_loss:
+            return stop_loss - slippage, "stop"
+        if high - half_spread >= take_profit:
+            return take_profit, "target"
+    else:
+        if high + half_spread >= stop_loss:
+            return stop_loss + slippage, "stop"
+        if low + half_spread <= take_profit:
+            return take_profit, "target"
+
+    if timed_out:
+        return close - direction * (half_spread + slippage), "timeout"
+    return None, ""
+
+
 @dataclass
 class Trade:
     entry_time: pd.Timestamp
@@ -134,31 +171,14 @@ class Backtester:
 
             # -- B. manage the open position across this bar -------------
             if position is not None:
-                d = position.plan.direction
-                exit_exec: Optional[float] = None
-                reason = ""
-
-                if d > 0:
-                    # long: exits execute at the bid (mid - half spread)
-                    stop_touch = low[i] - half_spread <= position.stop_loss
-                    target_touch = high[i] - half_spread >= position.take_profit
-                    if stop_touch:                       # pessimistic ordering
-                        exit_exec, reason = position.stop_loss - slip, "stop"
-                    elif target_touch:
-                        exit_exec, reason = position.take_profit, "target"
-                else:
-                    # short: exits execute at the ask (mid + half spread)
-                    stop_touch = high[i] + half_spread >= position.stop_loss
-                    target_touch = low[i] + half_spread <= position.take_profit
-                    if stop_touch:
-                        exit_exec, reason = position.stop_loss + slip, "stop"
-                    elif target_touch:
-                        exit_exec, reason = position.take_profit, "target"
-
-                if exit_exec is None and (i - position.entry_bar) >= max_hold:
-                    exit_exec = close[i] - d * (half_spread + slip)
-                    reason = "timeout"
-
+                exit_exec, reason = resolve_exit(
+                    direction=position.plan.direction,
+                    stop_loss=position.stop_loss,
+                    take_profit=position.take_profit,
+                    high=high[i], low=low[i], close=close[i],
+                    half_spread=half_spread, slippage=slip,
+                    timed_out=(i - position.entry_bar) >= max_hold,
+                )
                 if exit_exec is not None:
                     trades.append(self._close(position, ts, i, exit_exec, reason))
                     position = None

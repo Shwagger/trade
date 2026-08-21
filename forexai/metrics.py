@@ -14,6 +14,21 @@ import numpy as np
 import pandas as pd
 
 BARS_PER_YEAR = 24 * 252  # hourly FX bars
+TRADING_SECONDS_PER_YEAR = 252 * 24 * 3600
+
+
+def infer_bars_per_year(index: pd.DatetimeIndex) -> int:
+    """Annualisation factor read off the bar spacing.
+
+    Hard-coding hourly bars would inflate the Sharpe of a daily system by a
+    factor of five, so the timeframe is measured instead of assumed.
+    """
+    if index is None or len(index) < 3:
+        return BARS_PER_YEAR
+    step = pd.Series(index).diff().dropna().median()
+    if pd.isna(step) or step.total_seconds() <= 0:
+        return BARS_PER_YEAR
+    return max(1, int(round(TRADING_SECONDS_PER_YEAR / step.total_seconds())))
 
 
 def max_drawdown(equity: pd.Series) -> tuple[float, float]:

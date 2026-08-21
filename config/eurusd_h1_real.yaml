@@ -38,8 +38,9 @@ model:
 signal:
   ml_weight: 0.65
   technical_weight: 0.35
-  min_score: 0.12
-  min_confidence: 0.40
+  min_score: 0.15
+  min_confidence_lift: 1.10   # winning-side probability vs its own base rate
+  min_confidence: 0.0         # absolute floor, 0 = off (see README)
   require_agreement: true
 
 risk:
