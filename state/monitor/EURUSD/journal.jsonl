@@ -1,2 +1,3 @@
 {"ts": "2026-08-21T05:25:26+00:00", "kind": "start", "bar": "2026-08-21 05:00:00+00:00", "equity": 10000.0, "detail": "cold start: watching from the most recent closed bar"}
 {"ts": "2026-08-21T06:59:26+00:00", "kind": "signal", "bar": "2026-08-21 06:00:00+00:00", "action": "BUY", "confidence": 0.3584, "lift": 1.119, "score": 0.2259, "approved": false, "lots": 0.0, "entry": null, "stop_loss": null, "take_profit": null, "detail": "will fill at the next bar open"}
+{"ts": "2026-08-21T08:51:07+00:00", "kind": "fill", "bar": "2026-08-21 07:00:00+00:00", "direction": 1, "lots": 0.33, "entry": 1.17021, "stop_loss": 1.16892, "take_profit": 1.17278, "risk": 49.35}
