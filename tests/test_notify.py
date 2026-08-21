@@ -146,3 +146,47 @@ def test_monitor_survives_a_broken_notifier(tmp_path):
     monitor._notify("anything")                     # must not raise
     journal = monitor.journal.read()
     assert (journal["kind"] == "notify_failed").any()
+
+
+def test_start_alert_proves_the_plumbing():
+    from forexai.notify import format_start
+
+    text = format_start("EURUSD", "1h", pd.Timestamp("2026-08-21 05:00", tz="UTC"), 10_000.0)
+    assert "MONITOR STARTED" in text
+    assert "EURUSD" in text and "10,000" in text
+    assert "never sends an order" in text
+
+
+def test_a_cold_start_sends_exactly_one_confirmation(tmp_path):
+    """First run must speak up once, then go quiet until a setup fires."""
+    from forexai.config import Config
+    from forexai.data.synthetic import generate_ohlcv
+    from forexai.monitor import Monitor
+    from forexai.pipeline import build_dataset, fit_model
+
+    class Recorder:
+        enabled = True
+
+        def __init__(self):
+            self.messages = []
+
+        def send(self, text):
+            self.messages.append(text)
+            return True
+
+    cfg = Config()
+    cfg.model.ensemble_weights = {"gbm": 0.0, "forest": 1.0, "linear": 0.0}
+    bars = generate_ohlcv(4_000, seed=77)
+    ds = build_dataset(bars, cfg)
+    model = fit_model(ds, ds.trainable()[:2_500], cfg)
+
+    recorder = Recorder()
+    monitor = Monitor(cfg, model, workdir=tmp_path, retrain_every=0, notifier=recorder)
+    monitor.step(bars)
+
+    assert len(recorder.messages) == 1
+    assert "MONITOR STARTED" in recorder.messages[0]
+
+    # A second pass with nothing new must not repeat the announcement.
+    monitor.step(bars)
+    assert len(recorder.messages) == 1

@@ -42,6 +42,7 @@ from .notify import (
     format_close,
     format_drift,
     format_halt,
+    format_start,
     format_trade_alert,
 )
 from .pipeline import build_dataset, fit_model, make_signals
@@ -256,6 +257,14 @@ class Monitor:
                     bar=str(new_bars[0]),
                     equity=self.state.equity,
                     detail="cold start: watching from the most recent closed bar",
+                )
+            )
+            self._notify(
+                format_start(
+                    symbol=cfg.instrument.symbol,
+                    timeframe=cfg.data.timeframe,
+                    bar_time=new_bars[0],
+                    equity=self.state.equity,
                 )
             )
 

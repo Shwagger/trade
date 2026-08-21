@@ -99,6 +99,24 @@ def format_trade_alert(
     )
 
 
+def format_start(symbol: str, timeframe: str, bar_time, equity: float) -> str:
+    """Sent once, when the watcher starts on a fresh account.
+
+    Its job is to prove the plumbing works. Without it the first run is silent -
+    no setup fires on a single bar - and silence is indistinguishable from a
+    broken token.
+    """
+    return (
+        f"MONITOR STARTED - {symbol} {timeframe}\n"
+        f"  watching from bar {bar_time}\n"
+        f"  paper equity {equity:,.2f}\n"
+        f"\n"
+        f"Telegram is wired correctly. From now on you get a message only when\n"
+        f"a setup actually fires - most bars are WAIT, so expect quiet stretches.\n"
+        f"Paper only: this never sends an order to a broker."
+    )
+
+
 def format_fill(symbol: str, trade_direction: int, entry: float, lots: float,
                 stop_loss: float, take_profit: float) -> str:
     return (
