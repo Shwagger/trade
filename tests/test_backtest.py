@@ -232,3 +232,77 @@ def test_a_bar_that_stops_us_out_cannot_be_saved_by_its_own_spike():
     trade = run(bars, cfg).trades.iloc[0]
     assert trade["exit_reason"] == "stop"
     assert trade["r_multiple"] == pytest.approx(-1.0, abs=1e-6)
+
+
+# ----------------------------------------------------------------------
+# cost accounting
+# ----------------------------------------------------------------------
+def test_a_free_market_costs_nothing():
+    bars = flat_bars()
+    bars.iloc[13, bars.columns.get_loc("high")] = 1.10305
+    trade = run(bars, make_config()).trades.iloc[0]
+    assert trade["cost"] == pytest.approx(0.0, abs=1e-9)
+    assert trade["cost_r"] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_recorded_cost_is_the_friction_the_broker_charged():
+    """Commission, spread and slippage, in account currency, per lot."""
+    bars = flat_bars()
+    bars.iloc[13, bars.columns.get_loc("high")] = 1.1060
+    charged = run(
+        bars, make_config(spread_pips=1.5, slippage_pips=0.3, commission=7.0)
+    ).trades.iloc[0]
+
+    # Target exit: full spread plus one side of slippage, plus commission.
+    expected_per_lot = (1.5 + 0.3) * 10.0 + 7.0
+    assert charged["cost"] / charged["lots"] == pytest.approx(expected_per_lot, rel=1e-6)
+
+
+def test_spread_does_not_shrink_a_winner_it_moves_the_levels():
+    """Why gross expectancy cannot be reconstructed by adding the cost back.
+
+    Stops and targets are set from the executed entry, so a trade that reaches
+    its target still travels exactly the planned distance. The spread makes
+    reaching it less likely; it does not reduce the win.
+    """
+    bars = flat_bars()
+    bars.iloc[13, bars.columns.get_loc("high")] = 1.1060
+
+    free = run(bars, make_config()).trades.iloc[0]
+    charged = run(bars, make_config(spread_pips=1.5, slippage_pips=0.3)).trades.iloc[0]
+
+    pips_free = (free["exit"] - free["entry"]) / 0.0001
+    pips_charged = (charged["exit"] - charged["entry"]) / 0.0001
+    assert pips_charged == pytest.approx(pips_free, rel=1e-6)
+    assert charged["entry"] > free["entry"], "the spread shifts where the trade begins"
+
+
+def test_a_target_exit_pays_less_slippage_than_a_stop():
+    """A limit order fills at its price or not at all; a stop is a market order."""
+    cfg = make_config(spread_pips=1.0, slippage_pips=0.5, commission=0.0)
+
+    won = flat_bars()
+    won.iloc[13, won.columns.get_loc("high")] = 1.1060
+    target = run(won, cfg).trades.iloc[0]
+    assert target["exit_reason"] == "target"
+
+    lost = flat_bars()
+    lost.iloc[13, lost.columns.get_loc("low")] = 1.09845
+    stop = run(lost, cfg).trades.iloc[0]
+
+    assert stop["cost"] / stop["lots"] > target["cost"] / target["lots"]
+
+
+def test_metrics_report_friction_without_inventing_a_gross_figure():
+    from forexai.metrics import compute_metrics
+
+    bars = flat_bars(n=60)
+    bars.iloc[13, bars.columns.get_loc("high")] = 1.1060
+    result = run(bars, make_config(spread_pips=1.5, slippage_pips=0.3, commission=7.0))
+    metrics = compute_metrics(result.trades, result.equity, 10_000.0)
+
+    assert metrics["cost_r_per_trade"] > 0
+    assert metrics["cost_currency_per_trade"] > 0
+    assert "expectancy_r_gross" not in metrics, (
+        "a gross expectancy cannot be reconstructed by adding the cost back"
+    )

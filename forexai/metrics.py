@@ -85,6 +85,20 @@ def compute_metrics(
     out["worst_r"] = round(float(r.min()), 3) if len(r) else 0.0
     out["avg_bars_held"] = round(float(trades["bars_held"].mean()), 2)
 
+    # Friction attributable to each trade, as a share of the risk taken. It is
+    # reported, never added back to build a "gross expectancy": stops and
+    # targets are placed relative to the executed entry, so the spread does not
+    # shrink a winning trade - it makes winning less likely by moving the
+    # levels. The only honest frictionless figure comes from re-running the
+    # whole walk-forward with the costs set to zero (see README).
+    if "cost_r" in trades.columns:
+        cost_r = trades["cost_r"].astype(float).replace([np.inf, -np.inf], np.nan).dropna()
+        if len(cost_r):
+            out["cost_r_per_trade"] = round(float(cost_r.mean()), 4)
+            out["cost_currency_per_trade"] = round(
+                float(trades["cost"].astype(float).mean()), 2
+            )
+
     # Bar-level risk-adjusted return on the equity curve.
     rets = equity.pct_change().dropna()
     if len(rets) > 2 and rets.std(ddof=0) > 0:
@@ -115,6 +129,8 @@ def format_metrics(m: Dict[str, float]) -> str:
         f"  win rate            {m.get('win_rate_pct', 0):.2f} %",
         f"  expectancy          {m.get('expectancy_r', 0):+.4f} R  "
         f"({m.get('expectancy_currency', 0):+.2f} per trade)",
+        f"  broker friction     {m.get('cost_r_per_trade', float('nan')):.4f} R per trade  "
+        f"({m.get('cost_currency_per_trade', float('nan')):.2f} per trade)",
         f"  profit factor       {m.get('profit_factor', 0):.3f}",
         f"  avg win / avg loss  {m.get('avg_win_r', 0):+.2f} R / {m.get('avg_loss_r', 0):+.2f} R",
         f"  total return        {m.get('total_return_pct', 0):+.2f} %",

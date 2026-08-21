@@ -118,3 +118,25 @@ def test_yahoo_style_frame_survives_the_whole_pipeline(bars):
     model = fit_model(ds, train, cfg)
     result = run_backtest(ds, make_signals(model, ds, test, cfg), test, cfg)
     assert len(result.equity) == len(test)
+
+
+def test_frictionless_zeroes_the_swap_too(capsys):
+    """Zeroing spread, slippage and commission by hand leaves swap behind."""
+    from forexai.cli import _load_config, build_parser
+
+    args = build_parser().parse_args(
+        ["walkforward", "--spread", "0", "--slippage", "0", "--commission", "0"]
+    )
+    partial = _load_config(args)
+    assert partial.costs.swap_pips_per_night_long != 0.0, (
+        "this is the leak the flag exists to close"
+    )
+
+    args = build_parser().parse_args(["walkforward", "--frictionless"])
+    clean = _load_config(args)
+    assert clean.costs.spread_pips == 0.0
+    assert clean.costs.slippage_pips == 0.0
+    assert clean.costs.commission_per_lot_roundturn == 0.0
+    assert clean.costs.swap_pips_per_night_long == 0.0
+    assert clean.costs.swap_pips_per_night_short == 0.0
+    assert "FRICTIONLESS DIAGNOSTIC" in capsys.readouterr().out

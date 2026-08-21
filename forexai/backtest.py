@@ -122,6 +122,8 @@ class Trade:
     r_multiple: float
     bars_held: int
     exit_reason: str
+    cost: float
+    cost_r: float
     risk_amount: float
     score: float
     confidence: float
@@ -278,6 +280,26 @@ class Backtester:
             return 0
         return int((exit_ - first) / pd.Timedelta(days=1)) + 1
 
+    def _friction(self, lots: float, exit_reason: str, swap: float) -> float:
+        """What the broker took from this trade, in account currency.
+
+        Separating this out answers a question the net result cannot: when a
+        strategy loses slightly, is there no signal at all, or a real signal too
+        small to pay the toll? Those two have completely different remedies.
+
+        Half the spread is paid entering and half exiting. Slippage is paid on
+        the entry and again on a stop (a market order), but not on a target
+        (a limit order, which fills at its price or not at all).
+        """
+        cfg = self.cfg
+        slipped_exits = 1.0 if exit_reason in ("stop", "timeout", "end of data") else 0.0
+        friction_pips = cfg.costs.spread_pips + cfg.costs.slippage_pips * (1.0 + slipped_exits)
+        cost = friction_pips * cfg.instrument.pip_value_per_lot * lots
+        cost += cfg.costs.commission_per_lot_roundturn * lots
+        # `swap` is a signed adjustment already added to the P&L: negative when
+        # holding overnight costs money, positive on the rare paying side.
+        return cost - swap
+
     def _close(
         self,
         position: OpenPosition,
@@ -296,13 +318,16 @@ class Backtester:
         pnl -= cfg.costs.commission_per_lot_roundturn * plan.lots
 
         nights = self._rollovers(position.entry_time, ts)
+        swap = 0.0
         if nights:
             swap_pips = (
                 cfg.costs.swap_pips_per_night_long if d > 0
                 else cfg.costs.swap_pips_per_night_short
             )
-            pnl += nights * swap_pips * cfg.instrument.pip_value_per_lot * plan.lots
+            swap = nights * swap_pips * cfg.instrument.pip_value_per_lot * plan.lots
+            pnl += swap
 
+        cost = self._friction(plan.lots, reason, swap)
         self.rm.register_close(pnl)
         risk_amount = plan.risk_amount if plan.risk_amount > 0 else float("nan")
 
@@ -319,6 +344,8 @@ class Backtester:
             r_multiple=float(pnl / risk_amount) if risk_amount == risk_amount else float("nan"),
             bars_held=int(bar - position.entry_bar),
             exit_reason=reason,
+            cost=float(cost),
+            cost_r=float(cost / risk_amount) if risk_amount == risk_amount else float("nan"),
             risk_amount=float(plan.risk_amount),
             score=position.score,
             confidence=position.confidence,

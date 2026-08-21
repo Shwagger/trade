@@ -448,12 +448,20 @@ class Monitor:
         pnl -= cfg.costs.commission_per_lot_roundturn * position.lots
 
         nights = self._rollovers(pd.Timestamp(position.entry_time), pd.Timestamp(timestamp))
+        swap = 0.0
         if nights:
-            swap = (
+            swap_pips = (
                 cfg.costs.swap_pips_per_night_long if d > 0
                 else cfg.costs.swap_pips_per_night_short
             )
-            pnl += nights * swap * cfg.instrument.pip_value_per_lot * position.lots
+            swap = nights * swap_pips * cfg.instrument.pip_value_per_lot * position.lots
+            pnl += swap
+
+        slipped = 1.0 if reason in ("stop", "timeout") else 0.0
+        friction_pips = cfg.costs.spread_pips + cfg.costs.slippage_pips * (1.0 + slipped)
+        cost = friction_pips * cfg.instrument.pip_value_per_lot * position.lots
+        cost += cfg.costs.commission_per_lot_roundturn * position.lots
+        cost -= swap
 
         # The risk engine owns the equity: it also updates the losing streak,
         # the cooldown and the drawdown kill switch from this result.
@@ -468,6 +476,8 @@ class Monitor:
             "entry": round(position.entry, 5), "exit": round(float(exit_exec), 5),
             "pnl": round(pnl, 2), "r_multiple": round(r_multiple, 4),
             "exit_reason": reason, "bars_held": position.bars_held,
+            "cost": round(cost, 2),
+            "cost_r": round(cost / position.risk_amount, 4) if position.risk_amount else None,
             "equity_after": round(self.state.equity, 2),
         }
         self.state.closed_trades.append(trade)

@@ -44,29 +44,61 @@ MODEL_PATH = Path("models/latest.joblib")
 
 
 # ----------------------------------------------------------------------
+# Shared options use argparse.SUPPRESS so a sub-command does not overwrite a
+# value given before it. That means unset options are simply absent, so every
+# read goes through a default rather than assuming the attribute exists.
+OPTIONAL_ARGS = (
+    "config", "symbol", "source", "path", "bars", "seed", "spread", "slippage",
+    "commission", "frictionless", "risk", "equity",
+    "train_bars", "test_bars", "step_bars",
+)
+
+
 def _load_config(args: argparse.Namespace) -> Config:
-    cfg = Config.from_yaml(args.config) if args.config else Config()
-    if args.symbol:
-        cfg.instrument.symbol = args.symbol
-    if args.source:
-        cfg.data.source = args.source
-    if args.path:
-        cfg.data.path = args.path
+    opt = {name: getattr(args, name, None) for name in OPTIONAL_ARGS}
+
+    cfg = Config.from_yaml(opt["config"]) if opt["config"] else Config()
+    if opt["symbol"]:
+        cfg.instrument.symbol = opt["symbol"]
+    if opt["source"]:
+        cfg.data.source = opt["source"]
+    if opt["path"]:
+        cfg.data.path = opt["path"]
         cfg.data.source = "csv"
-    if args.bars:
-        cfg.data.bars = args.bars
-    if args.seed is not None:
-        cfg.data.seed = args.seed
-    if args.spread is not None:
-        cfg.costs.spread_pips = args.spread
-    if args.risk is not None:
-        cfg.risk.risk_per_trade = args.risk
-    if args.equity is not None:
-        cfg.initial_equity = args.equity
+    if opt["bars"]:
+        cfg.data.bars = opt["bars"]
+    if opt["seed"] is not None:
+        cfg.data.seed = opt["seed"]
+    if opt["spread"] is not None:
+        cfg.costs.spread_pips = opt["spread"]
+    if opt["slippage"] is not None:
+        cfg.costs.slippage_pips = opt["slippage"]
+    if opt["commission"] is not None:
+        cfg.costs.commission_per_lot_roundturn = opt["commission"]
+    if opt["frictionless"]:
+        # Every friction, including the overnight swap that individual
+        # overrides leave behind. Diagnostic only: it answers "is there a
+        # signal here at all", never "is this tradable".
+        cfg.costs.spread_pips = 0.0
+        cfg.costs.slippage_pips = 0.0
+        cfg.costs.commission_per_lot_roundturn = 0.0
+        cfg.costs.swap_pips_per_night_long = 0.0
+        cfg.costs.swap_pips_per_night_short = 0.0
+        print(
+            "FRICTIONLESS DIAGNOSTIC: spread, slippage, commission and swap are\n"
+            "all zero. No broker on earth offers this. A result here answers one\n"
+            "question only - whether the signal has any edge before costs. If it\n"
+            "is positive here and negative with real costs, the signal is real\n"
+            "but too small to pay the toll: look at a cheaper broker, a higher\n"
+            "timeframe, or wider stops - not at the model."
+        )
+    if opt["risk"] is not None:
+        cfg.risk.risk_per_trade = opt["risk"]
+    if opt["equity"] is not None:
+        cfg.initial_equity = opt["equity"]
     for name in ("train_bars", "test_bars", "step_bars"):
-        value = getattr(args, name, None)
-        if value:
-            setattr(cfg.walk_forward, name, value)
+        if opt[name]:
+            setattr(cfg.walk_forward, name, opt[name])
     return cfg
 
 
@@ -590,6 +622,12 @@ def _global_options() -> argparse.ArgumentParser:
     common.add_argument("--bars", type=int, help="how many bars to use")
     common.add_argument("--seed", type=int, help="synthetic data seed")
     common.add_argument("--spread", type=float, help="override spread in pips")
+    common.add_argument("--slippage", type=float, help="override slippage in pips per side")
+    common.add_argument("--commission", type=float,
+                        help="override commission per lot round turn")
+    common.add_argument("--frictionless", action="store_true",
+                        help="zero every cost including swap - a diagnostic that "
+                             "answers whether the signal has any edge before costs")
     common.add_argument("--risk", type=float, help="risk per trade, e.g. 0.005")
     common.add_argument("--equity", type=float, help="starting equity")
     return common
@@ -677,7 +715,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    for attr in ("config", "symbol", "source", "path", "bars", "seed", "spread", "risk", "equity"):
+    for attr in OPTIONAL_ARGS:
         if not hasattr(args, attr):
             setattr(args, attr, None)
     try:

@@ -42,7 +42,7 @@ bash scripts/setup_mac.sh
 ```
 
 C'est tout. Le script trouve ton Python, crée l'environnement, installe les
-dépendances, lance les 177 tests, télécharge de vraies barres EURUSD, fait
+dépendances, lance les 183 tests, télécharge de vraies barres EURUSD, fait
 tourner la validation, entraîne le modèle et te montre une alerte réelle.
 
 Deux pièges macOS qu'il gère à ta place :
@@ -252,6 +252,28 @@ l'inventer.
 * **Intervalle de confiance bootstrap** — si l'IC contient 0, tu n'as pas
   d'edge, tu as un échantillon. C'est l'antidote au backtest chanceux.
 * **Écart IS − OOS** — au-delà de ~0,25 R, le modèle apprend le passé par cœur.
+* **Friction courtier** — combien le broker prend par trade, en R. Sur un stop
+  de 13 pips avec 1 pip de spread et 7 $/lot, c'est ~0,16 R : le seuil de
+  rentabilité passe de 33,3 % à 36,2 % de réussite. Trois points de pourcentage
+  qui décident de tout.
+
+### Le diagnostic qui sépare « pas de signal » de « signal trop faible »
+
+```
+python -m forexai walkforward --source csv --path data/raw/EURUSD_1H.csv --frictionless
+```
+
+Spread, slippage, commission **et swap** à zéro. Aucun courtier n'offre ça —
+c'est un diagnostic, pas un résultat exploitable. Mais il tranche la seule
+question qui compte quand un système perd de peu :
+
+| Résultat | Interprétation | Où chercher |
+|---|---|---|
+| négatif avec frais, **négatif sans** | pas de signal | le modèle, les features, le marché |
+| négatif avec frais, **positif sans** | signal réel, trop faible pour payer le péage | courtier moins cher, timeframe plus haut, stops plus larges |
+
+Le second cas est réparable. Le premier ne l'est pas en changeant de courtier —
+et confondre les deux fait perdre des mois.
 
 Le verdict final n'est jamais « lance-toi » : au mieux c'est **GO TO DEMO**.
 
@@ -516,7 +538,7 @@ un danger structurel, il ne peut jamais en créer un ni l'agrandir. Ollama
 python -m pytest tests/ -q
 ```
 
-177 tests. Les plus importants :
+183 tests. Les plus importants :
 
 * `test_no_lookahead.py` — tronquer ou corrompre le futur ne doit changer
   **aucune** valeur de feature passée. Si ce test tombe, tout le reste est un
