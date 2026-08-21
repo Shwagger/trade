@@ -108,6 +108,15 @@ def test_telegram_reports_a_partial_configuration():
     assert "TELEGRAM_CHAT_ID" in TelegramNotifier(token="123:abc").describe()
 
 
+def test_describe_never_leaks_credentials():
+    """This string lands in CI logs. It must not carry the secret."""
+    notifier = TelegramNotifier(token="8844403757:AAsecret", chat_id="5432540333")
+    described = notifier.describe()
+    assert "AAsecret" not in described
+    assert "8844403757" not in described
+    assert "5432540333" not in described
+
+
 def test_telegram_never_raises_on_a_dead_endpoint():
     notifier = TelegramNotifier(
         token="123:abc", chat_id="42",

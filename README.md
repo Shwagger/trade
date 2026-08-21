@@ -360,6 +360,65 @@ ratée est journalisée, elle n'arrête jamais le processus.
 
 ---
 
+## Le faire tourner 24/7 sans laisser ton Mac allumé
+
+Ton ordinateur n'a pas besoin d'être allumé. Le dépôt contient un workflow
+GitHub Actions qui tourne **sur les serveurs de GitHub, toutes les heures,
+gratuitement** : il télécharge les dernières bougies, demande la décision au
+modèle, t'envoie l'alerte Telegram, et sauvegarde l'état du compte papier dans
+le dépôt — pour que le run de 15h05 sache ce qu'a fait celui de 14h05.
+
+### Mise en route (une fois, 2 minutes)
+
+1. Sur GitHub, va dans ton dépôt → **Settings** → **Secrets and variables** →
+   **Actions** → **New repository secret**
+2. Crée `TELEGRAM_BOT_TOKEN` — colle ton token
+3. Crée `TELEGRAM_CHAT_ID` — colle ton chat id
+4. Onglet **Actions** → **market monitor** → **Run workflow** pour le tester
+   tout de suite
+
+Ensuite ça tourne tout seul, à 5 minutes de chaque heure — assez tard pour que
+la bougie horaire soit vraiment fermée.
+
+### Sécurité des identifiants — non négociable
+
+Un token de bot est un mot de passe. Qui l'a peut piloter ton bot, lire tes
+messages et t'envoyer de **faux signaux de trade**.
+
+* Il ne va **jamais** dans un fichier du dépôt, jamais dans une capture d'écran,
+  jamais dans une conversation. Uniquement dans les secrets GitHub, ou en
+  variable d'environnement sur ta machine.
+* Si tu l'as exposé une fois : Telegram → **@BotFather** → `/revoke` → tu
+  récupères un token neuf. L'ancien meurt sur le champ.
+* Le code ne l'affiche nulle part : `describe()` dit `telegram: on`, sans le
+  token ni le chat id, parce que ces lignes finissent dans les logs CI qui sont
+  bien plus visibles qu'on ne le croit. Un test le vérifie.
+
+### Coût et limites
+
+* Dépôt **public** : minutes GitHub Actions illimitées, ça ne coûte rien.
+* Dépôt **privé** : 2 000 minutes/mois offertes. Un run dure ~1 minute, donc
+  ~720/mois en horaire — ça rentre. Le modèle n'est réentraîné qu'une fois par
+  semaine (cache) pour rester dans cette enveloppe.
+* Le week-end le forex est fermé : aucune bougie ne se ferme, aucun commit,
+  aucune alerte. Normal.
+
+### L'alternative plus solide
+
+GitHub Actions est parfait pour commencer, mais ce n'est pas fait pour du
+temps réel : le déclenchement peut avoir quelques minutes de retard quand leurs
+serveurs sont chargés. Le jour où tu passes en démo sérieuse, un petit VPS à
+4 €/mois (Hetzner) ou le palier gratuit d'Oracle Cloud te donne une machine
+toujours allumée :
+
+```
+bash scripts/watch.sh
+```
+
+Même code, même alertes, sans dépendre de l'ordonnanceur de GitHub.
+
+---
+
 ## Surveiller le marché en continu
 
 ```bash

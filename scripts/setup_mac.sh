@@ -22,8 +22,11 @@ die() { printf '\n\033[31m!! %s\033[0m\n' "$1" >&2; exit 1; }
 
 # ---------------------------------------------------------------- python
 say "looking for python 3"
-PY=""
-for candidate in python3 python3.13 python3.12 python3.11 python3.10 python3.9 python; do
+PY="${PY:-}"
+if [ -n "$PY" ] && ! command -v "$PY" >/dev/null 2>&1; then
+    die "PY=$PY was requested but that command does not exist"
+fi
+[ -n "$PY" ] || for candidate in python3 python3.13 python3.12 python3.11 python3.10 python3.9 python; do
     if command -v "$candidate" >/dev/null 2>&1; then
         version="$("$candidate" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null)"
         case "$version" in
@@ -54,12 +57,22 @@ fi
 # shellcheck disable=SC1091
 source .venv/bin/activate || die "could not activate .venv"
 python -m pip install --quiet --upgrade pip
-python -m pip install --quiet -r requirements.txt || die "dependency install failed"
+python -m pip install --quiet -r requirements-dev.txt || die "dependency install failed
+
+If pip complained about building a package from source, your Python may be
+newer than the released wheels. Install a version that has them:
+
+    brew install python@3.12
+    rm -rf .venv
+    PY=python3.12 bash scripts/setup_mac.sh"
 echo "    ready: $(python --version 2>&1)"
 
 # ---------------------------------------------------------------- tests
 say "running the test suite (about a minute)"
-python -m pytest tests/ -q || die "tests failed - stopping before trusting any number"
+python -c "import pytest" 2>/dev/null || die "pytest did not install - re-run this script"
+python -m pytest tests/ -q || die "tests failed - stopping before trusting any number.
+Paste the output above and it can be diagnosed; do not trade anything until
+the suite is green."
 
 # ---------------------------------------------------------------- data
 say "downloading real $SYMBOL $TIMEFRAME bars"

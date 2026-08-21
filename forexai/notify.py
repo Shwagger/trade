@@ -163,8 +163,10 @@ class TelegramNotifier:
         )
 
     def describe(self) -> str:
+        # Deliberately prints neither the token nor the chat id: this line ends
+        # up in CI logs, which are far more visible than people expect.
         if self.enabled:
-            return f"telegram: on (chat {self.chat_id})"
+            return "telegram: on"
         missing = []
         if not self.token:
             missing.append("TELEGRAM_BOT_TOKEN")

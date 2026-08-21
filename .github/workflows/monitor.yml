@@ -1,0 +1,112 @@
+# Watch the market without leaving a machine switched on.
+#
+# Runs once an hour on GitHub's servers: downloads the latest bars, asks the
+# model for a decision, and sends the alert to Telegram. The paper account's
+# state is committed back to the repository, so the run at 15:05 knows what the
+# run at 14:05 did.
+#
+# Credentials live in repository secrets, never in this file:
+#   Settings -> Secrets and variables -> Actions -> New repository secret
+#     TELEGRAM_BOT_TOKEN
+#     TELEGRAM_CHAT_ID
+#
+# This never sends an order to a broker. It tells a human what to do.
+
+name: market monitor
+
+on:
+  schedule:
+    # 5 minutes past every hour, so the hourly bar has definitely closed.
+    - cron: "5 * * * *"
+  workflow_dispatch:
+    inputs:
+      symbol:
+        description: "instrument to watch"
+        default: "EURUSD"
+      retrain:
+        description: "force a fresh model"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+# Never let two runs fight over the state file.
+concurrency:
+  group: market-monitor
+  cancel-in-progress: false
+
+env:
+  SYMBOL: ${{ github.event.inputs.symbol || 'EURUSD' }}
+  TIMEFRAME: "1h"
+  DATA: data/raw/monitor_bars.csv
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: install
+        run: pip install --quiet -r requirements.txt
+
+      - name: week stamp
+        id: week
+        run: echo "value=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+
+      - name: restore the model
+        uses: actions/cache@v4
+        with:
+          path: models
+          # Retrains once a week: often enough to keep learning, rarely enough
+          # that the hourly run stays cheap.
+          key: model-${{ env.SYMBOL }}-${{ steps.week.outputs.value }}-${{ hashFiles('requirements.txt') }}
+
+      - name: download the latest bars
+        run: |
+          python -m forexai fetch \
+            --symbol "$SYMBOL" --timeframe "$TIMEFRAME" --years 2 --out "$DATA"
+
+      - name: train if there is no model for this week
+        run: |
+          if [ ! -f models/latest.joblib ] || [ "${{ github.event.inputs.retrain }}" = "true" ]; then
+            echo "training a fresh model"
+            python -m forexai train --symbol "$SYMBOL" --source csv --path "$DATA"
+          else
+            echo "reusing this week's model"
+          fi
+
+      - name: watch the market
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python -m forexai monitor \
+            --interval 0 --telegram \
+            --workdir state/monitor \
+            --source csv --path "$DATA"
+
+      - name: keep the paper account's memory
+        run: |
+          git config user.name "forexai-monitor"
+          git config user.email "monitor@users.noreply.github.com"
+          git add state/
+          if git diff --cached --quiet; then
+            echo "nothing changed - no bar closed since the last run"
+            exit 0
+          fi
+          git commit -m "monitor state $(date -u +%Y-%m-%dT%H:%MZ) [skip ci]"
+          # Another run may have pushed while this one worked.
+          for attempt in 1 2 3; do
+            git pull --rebase --quiet && git push --quiet && exit 0
+            echo "push attempt $attempt failed, retrying"
+            sleep $((attempt * 5))
+          done
+          exit 1
