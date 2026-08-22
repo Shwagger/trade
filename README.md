@@ -615,8 +615,18 @@ budget, le délai et le canal de réponse, puis écrit un prix et un premier
 message pour chaque demande retenue.
 
 **Il n'envoie rien.** Pas de DM automatique, pas de compte automatisé : la
-machine chasse, tu parles. `python -m hunter market` compte ensuite ce que les
-gens ont réellement demandé — c'est le marché qui dit quoi vendre, au lieu de le
-deviner.
+machine chasse, tu parles. Anglais et portugais du Brésil, prix cité dans la
+monnaie de l'acheteur.
+
+Ensuite, deux compteurs :
+
+```bash
+python -m hunter market     # quelle catégorie est la plus demandée
+python -m hunter niche      # ce qui revient sans arrêt et que personne ne vend
+```
+
+Le second est le plus intéressant : il repère la demande répétée que le
+catalogue ne couvre pas — l'angle mort où se cache un business que personne n'a
+remarqué. Sous 25 demandes qualifiées, les deux refusent de conclure.
 
 Mode d'emploi complet : **[docs/HUNTER.md](docs/HUNTER.md)**.

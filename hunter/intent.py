@@ -54,23 +54,35 @@ POSITIVE = [
         r"\b(?:i (?:need|want|am looking for|'m looking for)|looking (?:for|to hire)|"
         r"we (?:need|are looking for|'re looking for)|seeking|"
         r"need(?:s|ed)?\s+(?:a|an|the|some|someone|help|two|\d)|"
-        r"anyone (?:who can|able to)|can someone|in search of|iso)\b", re.I), 22),
+        r"anyone (?:who can|able to)|can someone|in search of|iso|"
+        # pt-BR
+        r"preciso de|procuro|estou procurando|estou atr[áa]s de|algu[ée]m que|"
+        r"quem (?:faz|consegue)|preciso que)\b", re.I), 22),
     ("recrute", re.compile(
         r"\[?\s*(hiring|task|for ?hire\s*-\s*seeking)\s*\]?|"
-        r"\bwe(?:'re| are) hiring\b|\bhiring\b|\bseeking freelancer\b|\bfreelancer\?\b", re.I), 18),
+        r"\bwe(?:'re| are) hiring\b|\bhiring\b|\bseeking freelancer\b|\bfreelancer\?\b|"
+        # pt-BR
+        r"\bcontratando\b|\bvaga (?:de )?freela\w*\b|\bfreela\b|\bcontrato um\b", re.I), 18),
     ("paiement annoncé", re.compile(
         r"\b(?:(?:can|could|will|would|happy to|ready to|willing to|able to)\s+pay|"
         r"paid (?:gig|task|work|project|hourly)|budget|compensation|payment|"
-        r"i pay|we pay|paying|per (?:article|hour|video|page)|rate is)\b", re.I), 16),
+        r"i pay|we pay|paying|per (?:article|hour|video|page)|rate is|"
+        # pt-BR
+        r"or[çc]amento|posso pagar|pago (?:bem|[àa] vista|por|no)|quanto (?:cobra|custa)|"
+        r"valor a combinar|pagamento|remunera[çc][ãa]o)\b", re.I), 16),
     ("montant chiffré", None, 18),          # filled from the budget extractor
     ("urgence", None, 10),                  # filled from the deadline extractor
     ("chemin de réponse", None, 6),         # filled from the contact extractor
     ("catalogue", None, 12),                # filled from the playbook classifier
     ("scope decrit", re.compile(
         r"\b(deliverable|requirements?|scope|specs?|must have|the (?:site|app|script|file) "
-        r"(?:should|must)|attached|here is what|steps?:)", re.I), 6),
+        r"(?:should|must)|attached|here is what|steps?:|"
+        # pt-BR
+        r"requisitos|escopo|entreg[áa]vel|em anexo|segue o que)", re.I), 6),
     ("preuve de sérieux", re.compile(
-        r"\b(escrow|milestone|contract|nda|invoice|paypal|wise|stripe|upfront|deposit)\b", re.I), 8),
+        r"\b(escrow|milestone|contract|nda|invoice|paypal|wise|stripe|upfront|deposit|"
+        # pt-BR
+        r"pix|nota fiscal|mercado pago|adiantamento|metade adiantado)\b", re.I), 8),
 ]
 
 # Negative signals: things that make a post worthless however loud it is.
@@ -78,16 +90,29 @@ NEGATIVE = [
     ("vend ses services", re.compile(
         r"\[\s*for ?hire\s*\]|\b(i am|i'm|im)\s+(?:a|an)\s+\w+\s+(?:developer|designer|writer|editor|"
         r"marketer|freelancer)\b|\b(my portfolio|hire me|available for (?:work|hire)|"
-        r"offering my|my services|dm me for a quote)\b", re.I), -60),
+        r"offering my|my services|dm me for a quote)\b|"
+        # pt-BR
+        r"\b(?:sou|somos)\s+(?:um|uma)?\s*(?:desenvolvedor|designer|redator|editor|programador|"
+        r"freelancer)\b|\b(?:meu portf[óo]lio|presto servi[çc]o|me chama pra or[çc]amento|"
+        r"estou dispon[íi]vel para trabalhos?)\b", re.I), -60),
     ("non payé", re.compile(
         r"\b(unpaid|for free|no budget|equity only|revenue share|rev ?share|profit share|"
-        r"exposure|portfolio piece|volunteer|non ?paid)\b", re.I), -45),
+        r"exposure|portfolio piece|volunteer|non ?paid)\b|"
+        # pt-BR
+        r"\b(?:sem or[çc]amento|sem verba|permuta|divis[ãa]o de lucros|participa[çc][ãa]o nos lucros|"
+        r"troca de divulga[çc][ãa]o|volunt[áa]ri[oa]|de gra[çc]a)\b", re.I), -45),
     ("arnaque probable", re.compile(
         r"\b(crypto wallet|send (?:me )?(?:your )?(?:wallet|seed phrase)|investment opportunity|"
-        r"make \$\d+ (?:a|per) day|guaranteed profit|telegram only|wire transfer first)\b", re.I), -40),
+        r"make \$\d+ (?:a|per) day|guaranteed profit|telegram only|wire transfer first)\b|"
+        # pt-BR
+        r"\b(?:ganhe r?\$? ?\d+ por dia|lucro garantido|renda extra garantida|s[óo] no telegram)\b",
+        re.I), -40),
     ("poste salarié", re.compile(
         r"\b(full[- ]time (?:role|position|employee)|salary|benefits package|401k|"
-        r"visa sponsorship|permanent position)\b", re.I), -12),
+        r"visa sponsorship|permanent position)\b|"
+        # pt-BR
+        r"\b(?:clt|carteira assinada|vaga efetiva|sal[áa]rio|vale refei[çc][ãa]o|benef[íi]cios)\b",
+        re.I), -12),
     ("concours / spéculatif", re.compile(
         r"\b(contest|competition entry|spec work|pitch for free|whoever does it best)\b", re.I), -25),
 ]
@@ -146,11 +171,11 @@ def qualify(lead: Lead) -> Lead:
     confident = classification.confident
     lead.category = classification.playbook.key if confident else "other"
     lead.category_label = classification.playbook.label if confident else OTHER.label
+    catalogue_delta = 12 if confident else -10
+    total += catalogue_delta
     if confident:
-        total += 12
         signals.append(Signal("catalogue", 12, "+".join(classification.hits[:3])))
     else:
-        total -= 10
         penalties.append(Signal("hors catalogue", -10, "aucun mot-clé métier"))
 
     # freshness
@@ -188,6 +213,7 @@ def qualify(lead: Lead) -> Lead:
             penalties.append(Signal(name, points, match.group(0)))
 
     lead.score = int(max(0, min(100, round(total * SCALE))))
+    lead.demand_score = int(max(0, min(100, round((total - catalogue_delta) * SCALE))))
     lead.tier = "HOT" if lead.score >= HOT else "WARM" if lead.score >= WARM else "IGNORE"
     lead.signals = [s.to_dict() for s in signals]
     lead.penalties = [p.to_dict() for p in penalties]

@@ -8,6 +8,7 @@
     python -m hunter mark a1b2c3d4 sent -n "envoye en DM"
     python -m hunter pipeline               # trouvés -> envoyés -> répondus -> gagnes
     python -m hunter market --days 14       # what to sell, counted not guessed
+    python -m hunter niche                  # repeated demand nobody serves yet
 
 Nothing here contacts a lead. The last step is always a human pressing send.
 """
@@ -22,6 +23,8 @@ from pathlib import Path
 from . import DEFAULT_WORKDIR, __version__
 from .intent import explain, qualify
 from .lead import STATUSES
+from .niche import MIN_COUNT, clusters
+from .niche import render as render_niche
 from .offer import LANGS, polish, prepare
 from .report import (format_telegram, market_table, render_funnel, render_html, render_lead,
                      render_market, render_run)
@@ -75,6 +78,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     market = sub.add_parser("market", help="ce que le marché demande, compté")
     market.add_argument("--days", type=float, default=7.0)
+
+    niche = sub.add_parser("niche", help="la demande qui revient et que personne ne sert")
+    niche.add_argument("--days", type=float, default=14.0)
+    niche.add_argument("--min-count", type=int, default=MIN_COUNT,
+                       help="nombre d'annonces avant qu'un terme compte comme récurrent")
+    niche.add_argument("--show", type=int, default=8)
 
     dashboard = sub.add_parser("html", help="régénérer le tableau de bord sans rechasser")
     dashboard.add_argument("--out", default="state/hunter/dashboard.html")
@@ -178,6 +187,13 @@ def cmd_market(args) -> int:
     return 0
 
 
+def cmd_niche(args) -> int:
+    store = Store(args.workdir)
+    ranked, analysed = clusters(store.all(), args.days, args.min_count)
+    print(render_niche(ranked, analysed, args.days, args.show))
+    return 0
+
+
 def cmd_html(args) -> int:
     store = Store(args.workdir)
     _write_html(args.out, store, args.market_days)
@@ -227,8 +243,8 @@ def _telegram(leads: list) -> None:
 
 
 COMMANDS = {"hunt": cmd_hunt, "list": cmd_list, "draft": cmd_draft, "mark": cmd_mark,
-            "pipeline": cmd_pipeline, "market": cmd_market, "html": cmd_html,
-            "sources": cmd_sources}
+            "pipeline": cmd_pipeline, "market": cmd_market, "niche": cmd_niche,
+            "html": cmd_html, "sources": cmd_sources}
 
 
 def main(argv: list[str] | None = None) -> int:

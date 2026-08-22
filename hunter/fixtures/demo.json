@@ -1,64 +1,310 @@
 [
-  {"board": "forhire", "age_hours": 0.6, "num_comments": 1,
-   "title": "[HIRING] Need someone to scrape 4,000 product pages into a clean CSV - budget $300-500",
-   "body": "We run a small furniture shop and want a price comparison sheet. Three competitor sites, columns: product name, price, SKU, URL, stock status. Needs to be re-runnable monthly. Paying via PayPal, half up front. Need it ASAP, DM me."},
-
-  {"board": "hn", "age_hours": 1.4, "num_comments": 0,
-   "title": "SEEKING FREELANCER | Remote | Automate our invoice intake",
-   "body": "We process about 200 supplier invoices a month by hand. I want: email arrives -> PDF parsed -> line items into Google Sheets -> Slack notification to the finance channel. n8n or Make is fine, we already pay for both. Budget around $1,200 for a working flow this week. Email ops@example-invalid.io."},
-
-  {"board": "forhire", "age_hours": 2.2, "num_comments": 3,
-   "title": "[HIRING] Video editor for weekly YouTube Shorts - $50 per video, ongoing",
-   "body": "Fitness channel, 3 shorts a week from long-form footage. Need hook in the first 3 seconds, burned-in captions, 9:16. Send examples, I pay per video on delivery."},
-
-  {"board": "slavelabour", "age_hours": 3.1, "num_comments": 6,
-   "title": "[TASK] Fix my Google Sheet - VLOOKUP keeps returning N/A - $40",
-   "body": "Small sheet, two tabs, the formula breaks when I add rows. Need it working today. Will pay $40 via PayPal."},
-
-  {"board": "forhire", "age_hours": 4.5, "num_comments": 2,
-   "title": "Looking for someone to build a landing page for my SaaS",
-   "body": "We launch in three weeks. One page, waitlist form, needs to look serious to investors. I can pay, tell me your rate and show me something you built."},
-
-  {"board": "hn", "age_hours": 5.0, "num_comments": 0,
-   "title": "SEEKING FREELANCER | We need a chatbot on our docs site",
-   "body": "B2B SaaS, 400 pages of documentation. Want an assistant that answers support questions from the docs and says 'I don't know' instead of inventing. Budget $2k-3k, must be live before our conference in two weeks."},
-
-  {"board": "forhire", "age_hours": 7.0, "num_comments": 4,
-   "title": "[HIRING] Pitch deck designer needed for seed round - $600",
-   "body": "12 slides, we have the content in a Google Doc but it looks terrible. Investor meetings start next week. Need someone who has done fundraising decks before."},
-
-  {"board": "slavelabour", "age_hours": 9.0, "num_comments": 11,
-   "title": "[TASK] Write 5 SEO blog posts about home fitness - $20 each",
-   "body": "1000 words each, keyword list provided. No AI slop, I check. Paying $100 total for the batch."},
-
-  {"board": "forhire", "age_hours": 12.0, "num_comments": 1,
-   "title": "[HIRING] Excel dashboard from our sales export - budget flexible",
-   "body": "Monthly CSV export from our CRM, want pivot tables and one dashboard tab that updates when I paste new data. Roughly 5,000 rows. Willing to pay for something that just works."},
-
-  {"board": "forhire", "age_hours": 20.0, "num_comments": 8,
-   "title": "Need a React dev to fix a checkout bug - urgent, paying $250",
-   "body": "Stripe checkout throws a 500 on mobile Safari only. Repo is private, will share access. Need it fixed today, paying $250 on a working fix."},
-
-  {"board": "hn", "age_hours": 30.0, "num_comments": 0,
-   "title": "SEEKING FREELANCER | Market research on EU battery recyclers",
-   "body": "Need a sourced list of every battery recycling company in the EU with capacity, funding stage and contact. Roughly 60-100 companies. This feeds an investment decision. $800."},
-
-  {"board": "forhire", "age_hours": 50.0, "num_comments": 22,
-   "title": "[HIRING] WordPress site migration to new host - $150",
-   "body": "Two sites, small, need zero downtime. Paying $150 on completion."},
-
-  {"board": "forhire", "age_hours": 1.0, "num_comments": 5,
-   "title": "[FOR HIRE] Senior full-stack developer, 6 years, React/Node - $45/hr",
-   "body": "Available immediately for contract work. Portfolio in profile, DM me for a quote."},
-
-  {"board": "forhire", "age_hours": 2.0, "num_comments": 2,
-   "title": "Looking for a designer to build our brand - equity only, huge upside",
-   "body": "Pre-seed startup, no budget yet but this is a portfolio piece and we're going to be big. Revenue share possible later."},
-
-  {"board": "slavelabour", "age_hours": 1.2, "num_comments": 0,
-   "title": "Make $500 a day with this simple system - telegram only",
-   "body": "Send me your crypto wallet and I show you the method. Guaranteed profit."},
-
-  {"board": "forhire", "age_hours": 0.9, "num_comments": 0,
-   "title": "need help", "body": "asap pls"}
+ {
+  "board": "forhire",
+  "age_hours": 0.6,
+  "num_comments": 1,
+  "title": "[HIRING] Need someone to scrape 4,000 product pages into a clean CSV - budget $300-500",
+  "body": "We run a small furniture shop and want a price comparison sheet. Three competitor sites, columns: product name, price, SKU, URL, stock status. Needs to be re-runnable monthly. Paying via PayPal, half up front. Need it ASAP, DM me."
+ },
+ {
+  "board": "hn",
+  "age_hours": 1.4,
+  "num_comments": 0,
+  "title": "SEEKING FREELANCER | Remote | Automate our invoice intake",
+  "body": "We process about 200 supplier invoices a month by hand. I want: email arrives -> PDF parsed -> line items into Google Sheets -> Slack notification to the finance channel. n8n or Make is fine, we already pay for both. Budget around $1,200 for a working flow this week. Email ops@example-invalid.io."
+ },
+ {
+  "board": "forhire",
+  "age_hours": 2.2,
+  "num_comments": 3,
+  "title": "[HIRING] Video editor for weekly YouTube Shorts - $50 per video, ongoing",
+  "body": "Fitness channel, 3 shorts a week from long-form footage. Need hook in the first 3 seconds, burned-in captions, 9:16. Send examples, I pay per video on delivery."
+ },
+ {
+  "board": "slavelabour",
+  "age_hours": 3.1,
+  "num_comments": 6,
+  "title": "[TASK] Fix my Google Sheet - VLOOKUP keeps returning N/A - $40",
+  "body": "Small sheet, two tabs, the formula breaks when I add rows. Need it working today. Will pay $40 via PayPal."
+ },
+ {
+  "board": "forhire",
+  "age_hours": 4.5,
+  "num_comments": 2,
+  "title": "Looking for someone to build a landing page for my SaaS",
+  "body": "We launch in three weeks. One page, waitlist form, needs to look serious to investors. I can pay, tell me your rate and show me something you built."
+ },
+ {
+  "board": "hn",
+  "age_hours": 5.0,
+  "num_comments": 0,
+  "title": "SEEKING FREELANCER | We need a chatbot on our docs site",
+  "body": "B2B SaaS, 400 pages of documentation. Want an assistant that answers support questions from the docs and says 'I don't know' instead of inventing. Budget $2k-3k, must be live before our conference in two weeks."
+ },
+ {
+  "board": "forhire",
+  "age_hours": 7.0,
+  "num_comments": 4,
+  "title": "[HIRING] Pitch deck designer needed for seed round - $600",
+  "body": "12 slides, we have the content in a Google Doc but it looks terrible. Investor meetings start next week. Need someone who has done fundraising decks before."
+ },
+ {
+  "board": "slavelabour",
+  "age_hours": 9.0,
+  "num_comments": 11,
+  "title": "[TASK] Write 5 SEO blog posts about home fitness - $20 each",
+  "body": "1000 words each, keyword list provided. No AI slop, I check. Paying $100 total for the batch."
+ },
+ {
+  "board": "forhire",
+  "age_hours": 12.0,
+  "num_comments": 1,
+  "title": "[HIRING] Excel dashboard from our sales export - budget flexible",
+  "body": "Monthly CSV export from our CRM, want pivot tables and one dashboard tab that updates when I paste new data. Roughly 5,000 rows. Willing to pay for something that just works."
+ },
+ {
+  "board": "forhire",
+  "age_hours": 20.0,
+  "num_comments": 8,
+  "title": "Need a React dev to fix a checkout bug - urgent, paying $250",
+  "body": "Stripe checkout throws a 500 on mobile Safari only. Repo is private, will share access. Need it fixed today, paying $250 on a working fix."
+ },
+ {
+  "board": "hn",
+  "age_hours": 30.0,
+  "num_comments": 0,
+  "title": "SEEKING FREELANCER | Market research on EU battery recyclers",
+  "body": "Need a sourced list of every battery recycling company in the EU with capacity, funding stage and contact. Roughly 60-100 companies. This feeds an investment decision. $800."
+ },
+ {
+  "board": "forhire",
+  "age_hours": 50.0,
+  "num_comments": 22,
+  "title": "[HIRING] WordPress site migration to new host - $150",
+  "body": "Two sites, small, need zero downtime. Paying $150 on completion."
+ },
+ {
+  "board": "forhire",
+  "age_hours": 1.0,
+  "num_comments": 5,
+  "title": "[FOR HIRE] Senior full-stack developer, 6 years, React/Node - $45/hr",
+  "body": "Available immediately for contract work. Portfolio in profile, DM me for a quote."
+ },
+ {
+  "board": "forhire",
+  "age_hours": 2.0,
+  "num_comments": 2,
+  "title": "Looking for a designer to build our brand - equity only, huge upside",
+  "body": "Pre-seed startup, no budget yet but this is a portfolio piece and we're going to be big. Revenue share possible later."
+ },
+ {
+  "board": "slavelabour",
+  "age_hours": 1.2,
+  "num_comments": 0,
+  "title": "Make $500 a day with this simple system - telegram only",
+  "body": "Send me your crypto wallet and I show you the method. Guaranteed profit."
+ },
+ {
+  "board": "forhire",
+  "age_hours": 0.9,
+  "num_comments": 0,
+  "title": "need help",
+  "body": "asap pls"
+ },
+ {
+  "board": "forhire",
+  "age_hours": 1.1,
+  "num_comments": 1,
+  "title": "[HIRING] Someone to auto-answer our Instagram DMs about prices - $200",
+  "body": "Small clothing shop. We get 80 DMs a day asking the same three things: price, sizes, delivery time. Need something that answers those automatically and passes the rest to us. Paying $200 for a working setup."
+ },
+ {
+  "board": "forhire",
+  "age_hours": 6.0,
+  "num_comments": 2,
+  "title": "Need help answering repetitive Instagram DMs for my bakery - will pay $150",
+  "body": "Same questions every day about opening hours and cake prices. I want an automatic answer plus a list of the ones a human must handle. Budget $150."
+ },
+ {
+  "board": "slavelabour",
+  "age_hours": 11.0,
+  "num_comments": 3,
+  "title": "[TASK] Auto reply to whatsapp messages with our price list - $120",
+  "body": "We sell auto parts. Customers ask for prices on whatsapp all day. Need auto reply with the price list and then a notification to us. $120."
+ },
+ {
+  "board": "brdev",
+  "age_hours": 2.5,
+  "num_comments": 0,
+  "title": "Preciso de alguém para responder DMs do Instagram automaticamente - orçamento R$700",
+  "body": "Loja pequena de roupas, recebemos 60 DMs por dia perguntando preço e tamanho. Quero resposta automática para as perguntas repetidas e aviso pra gente nas outras. Pago via Pix, urgente."
+ },
+ {
+  "board": "empreendedorismo",
+  "age_hours": 8.0,
+  "num_comments": 1,
+  "title": "Procuro quem consiga automatizar respostas de whatsapp da minha loja - R$500",
+  "body": "São sempre as mesmas três perguntas: preço, entrega, tamanho. Quero automatizar isso essa semana. Orçamento R$500, pago metade adiantado."
+ },
+ {
+  "board": "brdev",
+  "age_hours": 4.0,
+  "num_comments": 1,
+  "title": "Preciso transformar pedidos do whatsapp em planilha automaticamente - R$600",
+  "body": "Recebo uns 40 pedidos por dia no whatsapp e digito tudo na mão numa planilha do excel. Quero que caia sozinho. Orçamento R$600."
+ },
+ {
+  "board": "forhire",
+  "age_hours": 14.0,
+  "num_comments": 2,
+  "title": "[HIRING] Turn whatsapp orders into a google sheet - $250",
+  "body": "Restaurant, 50 orders a day typed by hand into a sheet. Want them parsed into rows automatically with the customer name and items. $250."
+ },
+ {
+  "board": "slavelabour",
+  "age_hours": 26.0,
+  "num_comments": 4,
+  "title": "[TASK] Copy whatsapp orders into a spreadsheet every evening - $80/week",
+  "body": "Manual for now, but if you can automate it I pay more. Paying $80 a week for the manual version."
+ },
+ {
+  "board": "forhire",
+  "age_hours": 3.0,
+  "num_comments": 2,
+  "title": "[HIRING] Need a Shopify product feed cleaned up - $180",
+  "body": "3000 SKUs with broken titles and missing images. Need a clean CSV re-uploaded. Paying $180 on delivery."
+ },
+ {
+  "board": "hn",
+  "age_hours": 5.5,
+  "num_comments": 0,
+  "title": "SEEKING FREELANCER | Scrape EU grant databases weekly into a sheet",
+  "body": "We track public grant calls. Need a weekly scrape of 6 sites into one deduplicated sheet with deadline and amount. $900 for the build, ongoing after."
+ },
+ {
+  "board": "forhire",
+  "age_hours": 9.0,
+  "num_comments": 5,
+  "title": "Need someone to fix my checkout page on Shopify - urgent, $200",
+  "body": "Discount code field disappeared after a theme update. Need it fixed today, paying $200."
+ },
+ {
+  "board": "brdev",
+  "age_hours": 7.5,
+  "num_comments": 2,
+  "title": "Procuro editor de vídeo para cortes semanais do podcast - R$400 por semana",
+  "body": "3 cortes por semana, legendas queimadas, formato vertical. Pago R$400 por semana, contrato longo prazo se der certo."
+ },
+ {
+  "board": "forhire",
+  "age_hours": 16.0,
+  "num_comments": 3,
+  "title": "[HIRING] Landing page for a coaching offer - budget $350",
+  "body": "One page, booking form, needs to be live before Monday. Copy included would be ideal."
+ },
+ {
+  "board": "hn",
+  "age_hours": 21.0,
+  "num_comments": 0,
+  "title": "SEEKING FREELANCER | Internal chatbot over our Notion wiki",
+  "body": "600 pages of process docs. Want an assistant that answers staff questions with a link to the source page. Budget $2,500, needed within a month."
+ },
+ {
+  "board": "forhire",
+  "age_hours": 30.0,
+  "num_comments": 6,
+  "title": "[HIRING] Excel model for our monthly cashflow - $220",
+  "body": "We have the numbers in three files. Need one model that updates when we paste the new month. $220."
+ },
+ {
+  "board": "empreendedorismo",
+  "age_hours": 13.0,
+  "num_comments": 1,
+  "title": "Preciso de uma planilha que junte os relatórios das 3 lojas - R$350",
+  "body": "Cada loja manda um csv diferente por mês. Quero uma planilha só, atualizada quando eu colo os arquivos. Orçamento R$350."
+ },
+ {
+  "board": "forhire",
+  "age_hours": 19.0,
+  "num_comments": 4,
+  "title": "Need 10 SEO blog posts about dog training - $40 each",
+  "body": "Keyword list provided, 1200 words each, need them within two weeks."
+ },
+ {
+  "board": "hn",
+  "age_hours": 34.0,
+  "num_comments": 0,
+  "title": "SEEKING FREELANCER | Competitor pricing tracker for 12 shops",
+  "body": "Need daily price snapshots of 12 competitor stores into a database with a simple alert when something drops more than 10%. $1,500."
+ },
+ {
+  "board": "forhire",
+  "age_hours": 40.0,
+  "num_comments": 7,
+  "title": "[HIRING] Pitch deck cleanup before Thursday - $300",
+  "body": "14 slides, content is written, design is a mess. Investor meeting Thursday."
+ },
+ {
+  "board": "brdev",
+  "age_hours": 5.0,
+  "num_comments": 0,
+  "title": "Preciso de um bot que responda perguntas do site sobre nossos serviços - R$1200",
+  "body": "Empresa de contabilidade, muita pergunta repetida no site. Quero um assistente que responda com base nos nossos textos e não invente. Orçamento R$1200, até o fim do mês."
+ },
+ {
+  "board": "slavelabour",
+  "age_hours": 2.0,
+  "num_comments": 2,
+  "title": "[TASK] Clean 2,000 rows of messy customer data - $60",
+  "body": "Duplicates, inconsistent phone formats, missing states. Need a clean CSV back today."
+ },
+ {
+  "board": "forhire",
+  "age_hours": 28.0,
+  "num_comments": 9,
+  "title": "[HIRING] WordPress speed optimisation - $180",
+  "body": "Site loads in 6 seconds. Need it under 2. Paying $180."
+ },
+ {
+  "board": "forhire",
+  "age_hours": 3.4,
+  "num_comments": 1,
+  "title": "[HIRING] Auto-answer the same 5 questions in our Instagram DMs - $180",
+  "body": "Skincare shop. Sizes, price, shipping time, returns, ingredients. Same five questions all day. I want them answered automatically and the rest forwarded to me. Paying $180."
+ },
+ {
+  "board": "empreendedorismo",
+  "age_hours": 9.5,
+  "num_comments": 2,
+  "title": "Alguém que consiga responder automaticamente as perguntas repetidas do Instagram? R$450",
+  "body": "Loja de cosméticos, as mesmas 5 perguntas o dia inteiro no direct. Quero resposta automática e as difíceis vindo pra mim. Orçamento R$450, pago no Pix."
+ },
+ {
+  "board": "slavelabour",
+  "age_hours": 18.0,
+  "num_comments": 3,
+  "title": "[TASK] Extract 800 contacts from a PDF directory into a CSV - $70",
+  "body": "Name, company, email, phone. Clean file back, no duplicates. Paying $70 today."
+ },
+ {
+  "board": "hn",
+  "age_hours": 12.0,
+  "num_comments": 0,
+  "title": "SEEKING FREELANCER | Weekly summary of 40 industry newsletters into one brief",
+  "body": "We subscribe to 40 newsletters nobody reads. Want a weekly one-page brief with links. $600 a month if it works."
+ },
+ {
+  "board": "brdev",
+  "age_hours": 16.0,
+  "num_comments": 1,
+  "title": "Preciso automatizar o envio de orçamentos por whatsapp - R$800",
+  "body": "Hoje eu digito cada orçamento na mão e mando no whatsapp. Quero preencher um formulário e o cliente receber o pdf sozinho. Orçamento R$800, até o fim do mês."
+ },
+ {
+  "board": "forhire",
+  "age_hours": 22.0,
+  "num_comments": 5,
+  "title": "[HIRING] Instagram content calendar + 12 posts designed - $300",
+  "body": "Local gym, need a month of posts designed in our colours. $300 for the batch."
+ }
 ]

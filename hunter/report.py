@@ -23,6 +23,7 @@ from statistics import median
 from typing import Iterable, Optional
 
 from .lead import Lead
+from .offer import SYMBOL
 
 BAR = "=" * 78
 
@@ -150,7 +151,7 @@ def render_lead(lead: Lead, score_detail: str = "") -> str:
     if score_detail:
         lines += ["POURQUOI CE SCORE", *[f"  {line}" for line in score_detail.splitlines()], ""]
     lines += ["LE POST", *[f"  {line}" for line in _wrap(lead.text, 74)[:18]], ""]
-    lines += [f"PRIX  ${lead.price_usd:,.0f}" if lead.price_usd else "PRIX  -",
+    lines += [f"PRIX  {_price_label(lead)}" if lead.price_usd else "PRIX  -",
               f"  {lead.price_note}", "",
               "MESSAGE (relis-le, adapte une ligne, envoie-le toi-même)",
               BAR, lead.draft, BAR]
@@ -233,7 +234,7 @@ def _card(lead: Lead) -> str:
     </div>
   </header>
   <p class="sigs">{signals}</p>
-  <p class="price">Prix conseillé <strong>${lead.price_usd or 0:,.0f}</strong> — <span>{html.escape(lead.price_note)}</span></p>
+  <p class="price">Prix conseillé <strong>{html.escape(_price_label(lead))}</strong> — <span>{html.escape(lead.price_note)}</span></p>
   <details><summary>Le message à envoyer</summary><pre id="d-{lead.fingerprint}">{html.escape(lead.draft)}</pre>
     <button onclick="copy('d-{lead.fingerprint}',this)">Copier</button>
     <a href="{html.escape(lead.url)}" target="_blank" rel="noopener">Ouvrir l'annonce</a>
@@ -319,14 +320,30 @@ function copy(id,btn){
 
 
 # ----------------------------------------------------------------------
+def _price_label(lead: Lead) -> str:
+    """The price as the client will read it, with the USD behind it for you."""
+    if lead.price_usd is None:
+        return "-"
+    usd = f"${lead.price_usd:,.0f}"
+    if not lead.price_display or lead.price_display == usd:
+        return usd
+    return f"{lead.price_display}  (~{usd})"
+
+
 def _budget_label(lead: Lead) -> str:
+    """As the poster wrote it, with the USD equivalent so leads stay comparable."""
     if not lead.budget:
         return ""
     budget = lead.budget
     unit = "/h" if budget.get("per") == "hour" else ""
-    low, high = budget["usd_low"], budget["usd_high"]
-    body = f"${low:,.0f}{unit}" if low == high else f"${low:,.0f}-{high:,.0f}{unit}"
-    return body if budget["currency"] == "USD" else f"{body} ({budget['currency']})"
+    symbol = SYMBOL.get(budget["currency"], f"{budget['currency']} ")
+    low, high = budget["low"], budget["high"]
+    written = (f"{symbol}{low:,.0f}{unit}" if low == high
+               else f"{symbol}{low:,.0f}-{high:,.0f}{unit}")
+    if budget["currency"] == "USD":
+        return written
+    usd = budget["usd_high"]
+    return f"{written} (~${usd:,.0f})"
 
 
 def _short(text: str, width: int) -> str:

@@ -30,6 +30,11 @@ class Lead:
 
     # filled by qualify()
     score: int = 0
+    # Same score with the catalogue bonus/penalty removed: how strong the
+    # *buying* signal is, independently of whether we already sell it. This is
+    # what the blind-spot detector reads - a demand nobody serves scores badly
+    # on `score` by construction, which is exactly how a niche stays invisible.
+    demand_score: int = 0
     tier: str = "IGNORE"
     signals: list = field(default_factory=list)
     penalties: list = field(default_factory=list)
@@ -42,6 +47,7 @@ class Lead:
 
     # filled by prepare()
     price_usd: Optional[float] = None
+    price_display: str = ""      # the same price, in the currency you quote
     price_note: str = ""
     draft: str = ""
     proof: str = ""

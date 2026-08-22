@@ -33,6 +33,12 @@ def test_ignores_numbers_that_are_not_prices():
     assert extract_budget("we raised 2000000 in 2019 and have 50000 users") is None
 
 
+def test_a_number_on_the_next_line_is_not_a_thousands_separator():
+    # "$180.\n300 SKUs" used to parse as $180,300.
+    budget = extract_budget("Paying $180 on delivery.\n300 SKUs need cleaning.")
+    assert budget.high == 180
+
+
 def test_no_money_means_no_budget():
     assert extract_budget("looking for someone to help with my site") is None
 

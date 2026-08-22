@@ -3,7 +3,8 @@
 
   "reddit": {
     "enabled": true,
-    "subreddits": ["forhire", "hiring", "slavelabour", "DoneDirtCheap", "freelance_forhire", "jobbit"],
+    "_comment_br": "Les deux derniers sont brésiliens. Si l'un d'eux renvoie FAIL à chaque chasse, il n'existe pas ou il est fermé : supprime-le de la liste.",
+    "subreddits": ["forhire", "hiring", "slavelabour", "DoneDirtCheap", "freelance_forhire", "jobbit", "brdev", "empreendedorismo"],
     "limit": 100
   },
 
@@ -19,7 +20,7 @@
   },
 
   "rss": {
-    "_howto": "N'importe quel flux RSS/Atom. Une alerte Google sur \"need someone to build\" donne une URL RSS qui se colle ici et devient un radar de demande gratuit.",
+    "_howto": "N'importe quel flux RSS/Atom. Une alerte Google sur \"need someone to build\" (ou \"preciso de alguem para\", \"procuro freelancer\") donne une URL RSS qui se colle ici et devient un radar de demande gratuit, dans la langue que tu veux.",
     "enabled": false,
     "feeds": [
       "https://weworkremotely.com/categories/remote-programming-jobs.rss"

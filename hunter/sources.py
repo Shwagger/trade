@@ -41,8 +41,12 @@ TIMEOUT = 20
 DEFAULT_CONFIG = {
     "reddit": {
         "enabled": True,
+        # Anglophones first (the volume), then the Brazilian ones. A subreddit
+        # that does not exist shows up as one FAIL line in the report and costs
+        # nothing else - delete the ones that never answer.
         "subreddits": ["forhire", "hiring", "slavelabour", "DoneDirtCheap",
-                       "freelance_forhire", "jobbit"],
+                       "freelance_forhire", "jobbit",
+                       "brdev", "empreendedorismo"],
         "limit": 100,
     },
     "hn": {

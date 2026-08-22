@@ -48,8 +48,10 @@ _SYMBOL = {
     "mxn": "MXN",
 }
 
-# "$1,2k" style numbers: 1,200 / 1.2k / 800 / 50
-_NUM = r"\d{1,3}(?:[,\s]\d{3})+|\d+(?:\.\d+)?"
+# "$1,2k" style numbers: 1,200 / 1.2k / 800 / 50.
+# The thousands separator must never match a newline: "$180\n300 rows" is two
+# numbers on two lines, not one hundred and eighty thousand.
+_NUM = r"\d{1,3}(?:[,\u00a0 ]\d{3})+|\d+(?:\.\d+)?"
 _CUR_BEFORE = r"(?:R\$|US\$|C\$|A\$|\$|€|£|USD|EUR|GBP|BRL|CAD|AUD|INR|MXN)"
 _CUR_AFTER = r"(?:USD|EUR|GBP|BRL|CAD|AUD|INR|MXN|dollars?|euros?|reais|pounds?)"
 _K = r"(?:\s?[kK])?"
@@ -142,7 +144,7 @@ def clean_text(raw: str) -> str:
 
 
 def _to_float(token: str, k_suffix: bool) -> float:
-    token = token.replace(",", "").replace(" ", "")
+    token = token.replace(",", "").replace(" ", "").replace("\u00a0", "")
     value = float(token)
     return value * 1000 if k_suffix else value
 
@@ -246,13 +248,17 @@ def _plausible(budget: Budget) -> bool:
 # deadline
 # ----------------------------------------------------------------------
 _DEADLINE_RULES = [
-    (re.compile(r"\b(asap|urgent|urgently|right now|immediately|today|aujourd'hui|hoje)\b", re.I), 1.0),
+    (re.compile(r"\b(asap|urgent|urgently|right now|immediately|today|aujourd'hui|"
+                r"hoje|urgente|para ontem|o quanto antes|com urg[êe]ncia)\b", re.I), 1.0),
     (re.compile(r"\b(tomorrow|by tomorrow|amanh[ãa]|demain)\b", re.I), 1.5),
     (re.compile(r"\b(?:in|within|next)\s+(\d+)\s+(hours?|days?|weeks?)\b", re.I), None),
-    (re.compile(r"\b(this week|by friday|by monday|end of week|cette semaine)\b", re.I), 4.0),
+    (re.compile(r"\b(this week|by friday|by monday|end of week|cette semaine|"
+                r"(?:esta|essa) semana|at[ée] sexta)\b", re.I), 4.0),
     (re.compile(r"\b(next week|semaine prochaine|pr[oó]xima semana)\b", re.I), 10.0),
-    (re.compile(r"\b(this month|end of (?:the )?month|by the \d{1,2}(?:st|nd|rd|th))\b", re.I), 20.0),
-    (re.compile(r"\b(long[- ]term|ongoing|monthly|retainer|cont[ií]nuo)\b", re.I), 45.0),
+    (re.compile(r"\b(this month|end of (?:the )?month|by the \d{1,2}(?:st|nd|rd|th)|"
+                r"este m[êe]s|at[ée] o fim do m[êe]s)\b", re.I), 20.0),
+    (re.compile(r"\b(long[- ]term|ongoing|monthly|retainer|cont[ií]nuo|"
+                r"mensal|recorrente|longo prazo)\b", re.I), 45.0),
 ]
 
 _UNIT_DAYS = {"hour": 1 / 24, "hours": 1 / 24, "day": 1.0, "days": 1.0, "week": 7.0, "weeks": 7.0}
@@ -284,9 +290,11 @@ def extract_deadline(text: str) -> Optional[Deadline]:
 # ----------------------------------------------------------------------
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]{2,}")
 _CONTACT_RULES = [
-    (re.compile(r"\b(dm|pm)\s+me\b|\bsend\s+(?:me\s+)?a\s+(?:dm|pm)\b", re.I), "DM"),
-    (re.compile(r"\b(email|e-mail|mail)\s+me\b", re.I), "email"),
-    (re.compile(r"\b(comment|reply)\s+(?:below|here|with)\b", re.I), "comment"),
+    (re.compile(r"\b(dm|pm)\s+me\b|\bsend\s+(?:me\s+)?a\s+(?:dm|pm)\b|"
+                r"\bme chama\b|\bme manda (?:um )?(?:dm|direct|priv)", re.I), "DM"),
+    (re.compile(r"\b(email|e-mail|mail)\s+me\b|\bme manda(?:r)? um e-?mail\b", re.I), "email"),
+    (re.compile(r"\b(comment|reply)\s+(?:below|here|with)\b|\bcomenta (?:aqui|a[íi])\b", re.I),
+     "comment"),
     (re.compile(r"\bapply\s+(?:here|at|via|through)\b", re.I), "application form"),
     (re.compile(r"\b(discord|telegram|whatsapp|slack)\b", re.I), "chat app"),
 ]
