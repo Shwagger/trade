@@ -593,3 +593,30 @@ donne, et ça prend des mois.
 Ce qu'il fournit : une infrastructure honnête, qui **mesure** au lieu de
 promettre, et qui refuse de trader quand les conditions ne sont pas réunies.
 La différence entre un compte qui dure et un compte qui explose, elle est là.
+
+---
+
+## Deuxième outil du dépôt : le chasseur de demande
+
+Le système de trading met des mois à prouver quoi que ce soit. En attendant,
+`hunter/` répond à une question différente et beaucoup plus rapide : **qui, en
+ce moment, a écrit publiquement qu'il cherche à payer quelqu'un pour un travail
+que tu sais livrer ?**
+
+```bash
+python -m hunter hunt --demo     # hors ligne, sur des annonces synthétiques
+python -m hunter hunt            # la vraie chasse (aucune dépendance à installer)
+python -m hunter draft <id>      # le message prêt + le détail du score
+```
+
+Il lit des sources publiques et gratuites (Reddit, Hacker News, flux RSS), note
+l'intention d'achat de 0 à 100 à partir de signaux vérifiables, extrait le
+budget, le délai et le canal de réponse, puis écrit un prix et un premier
+message pour chaque demande retenue.
+
+**Il n'envoie rien.** Pas de DM automatique, pas de compte automatisé : la
+machine chasse, tu parles. `python -m hunter market` compte ensuite ce que les
+gens ont réellement demandé — c'est le marché qui dit quoi vendre, au lieu de le
+deviner.
+
+Mode d'emploi complet : **[docs/HUNTER.md](docs/HUNTER.md)**.

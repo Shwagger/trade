@@ -1,0 +1,28 @@
+{
+  "_comment": "Sources du chasseur de demande. Tout est gratuit et en lecture seule. Mets enabled=false pour couper une source, ajoute des subreddits ou des flux RSS sans toucher au code.",
+
+  "reddit": {
+    "enabled": true,
+    "subreddits": ["forhire", "hiring", "slavelabour", "DoneDirtCheap", "freelance_forhire", "jobbit"],
+    "limit": 100
+  },
+
+  "hn": {
+    "enabled": true,
+    "queries": ["SEEKING FREELANCER", "looking for a freelancer", "need someone to build"],
+    "limit": 60
+  },
+
+  "remoteok": {
+    "enabled": true,
+    "contract_only": true
+  },
+
+  "rss": {
+    "_howto": "N'importe quel flux RSS/Atom. Une alerte Google sur \"need someone to build\" donne une URL RSS qui se colle ici et devient un radar de demande gratuit.",
+    "enabled": false,
+    "feeds": [
+      "https://weworkremotely.com/categories/remote-programming-jobs.rss"
+    ]
+  }
+}

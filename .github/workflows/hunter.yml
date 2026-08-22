@@ -1,0 +1,97 @@
+# Chasse la demande pendant que tu dors.
+#
+# Toutes les deux heures, GitHub lit les annonces publiques, les note, prépare
+# les messages, et t'envoie les leads HOT sur Telegram. Toi, tu ne fais que la
+# dernière étape : lire, adapter une ligne, envoyer. Rien ici ne contacte
+# personne automatiquement.
+#
+# Secrets (facultatifs, pour l'alerte Telegram) :
+#   Settings -> Secrets and variables -> Actions
+#     TELEGRAM_BOT_TOKEN
+#     TELEGRAM_CHAT_ID
+#
+# MÉMOIRE : le dépôt est public, donc les leads et tes notes ne sont JAMAIS
+# committés (state/hunter/ est dans .gitignore). Ils vivent dans le cache
+# Actions d'un run à l'autre, et le rapport + le tableau de bord sont
+# téléchargeables en artefact à la fin de chaque run.
+
+name: demand hunter
+
+on:
+  schedule:
+    # Toutes les 2 heures. Les annonces fraîches valent 10x les vieilles.
+    - cron: "7 */2 * * *"
+  workflow_dispatch:
+    inputs:
+      sources:
+        description: "sources à interroger (vide = celles de config/hunter.json)"
+        default: ""
+      demo:
+        description: "tourner sur les annonces synthétiques (test du pipeline)"
+        type: boolean
+        default: false
+
+# Lecture seule : ce workflow ne pousse rien dans le dépôt.
+permissions:
+  contents: read
+
+concurrency:
+  group: demand-hunter
+  cancel-in-progress: false
+
+jobs:
+  hunt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # La mémoire de la chasse : les leads déjà vus, leur statut, tes notes.
+      # Une clé par run + restore-keys : chaque run repart du dernier état.
+      - name: retrouver la mémoire de la dernière chasse
+        uses: actions/cache@v4
+        with:
+          path: state/hunter
+          key: hunter-state-${{ github.run_id }}
+          restore-keys: |
+            hunter-state-
+
+      # Le chasseur n'utilise que la bibliothèque standard : rien à installer.
+      - name: chasser
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          mkdir -p state/hunter
+          python -m hunter hunt \
+            ${{ github.event.inputs.demo == 'true' && '--demo' || '' }} \
+            ${{ github.event.inputs.sources && format('--sources {0}', github.event.inputs.sources) || '' }} \
+            --rate 2 \
+            --html state/hunter/dashboard.html \
+            --telegram | tee state/hunter/last_report.txt
+
+      - name: publier le rapport dans le résumé du run
+        if: always()
+        run: |
+          {
+            echo '```'
+            cat state/hunter/last_report.txt 2>/dev/null || echo "(aucun rapport)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: publier le tableau de bord et les leads en artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chasse-${{ github.run_number }}
+          path: |
+            state/hunter/dashboard.html
+            state/hunter/leads.jsonl
+            state/hunter/last_report.txt
+          retention-days: 14
+          if-no-files-found: warn

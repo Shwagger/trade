@@ -10,3 +10,6 @@ runs/
 *.joblib
 .DS_Store
 .pytest_cache/
+
+# Leads, statuts et notes commerciales : ça reste chez toi (le dépôt est public).
+state/hunter/

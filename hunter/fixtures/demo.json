@@ -1,0 +1,64 @@
+[
+  {"board": "forhire", "age_hours": 0.6, "num_comments": 1,
+   "title": "[HIRING] Need someone to scrape 4,000 product pages into a clean CSV - budget $300-500",
+   "body": "We run a small furniture shop and want a price comparison sheet. Three competitor sites, columns: product name, price, SKU, URL, stock status. Needs to be re-runnable monthly. Paying via PayPal, half up front. Need it ASAP, DM me."},
+
+  {"board": "hn", "age_hours": 1.4, "num_comments": 0,
+   "title": "SEEKING FREELANCER | Remote | Automate our invoice intake",
+   "body": "We process about 200 supplier invoices a month by hand. I want: email arrives -> PDF parsed -> line items into Google Sheets -> Slack notification to the finance channel. n8n or Make is fine, we already pay for both. Budget around $1,200 for a working flow this week. Email ops@example-invalid.io."},
+
+  {"board": "forhire", "age_hours": 2.2, "num_comments": 3,
+   "title": "[HIRING] Video editor for weekly YouTube Shorts - $50 per video, ongoing",
+   "body": "Fitness channel, 3 shorts a week from long-form footage. Need hook in the first 3 seconds, burned-in captions, 9:16. Send examples, I pay per video on delivery."},
+
+  {"board": "slavelabour", "age_hours": 3.1, "num_comments": 6,
+   "title": "[TASK] Fix my Google Sheet - VLOOKUP keeps returning N/A - $40",
+   "body": "Small sheet, two tabs, the formula breaks when I add rows. Need it working today. Will pay $40 via PayPal."},
+
+  {"board": "forhire", "age_hours": 4.5, "num_comments": 2,
+   "title": "Looking for someone to build a landing page for my SaaS",
+   "body": "We launch in three weeks. One page, waitlist form, needs to look serious to investors. I can pay, tell me your rate and show me something you built."},
+
+  {"board": "hn", "age_hours": 5.0, "num_comments": 0,
+   "title": "SEEKING FREELANCER | We need a chatbot on our docs site",
+   "body": "B2B SaaS, 400 pages of documentation. Want an assistant that answers support questions from the docs and says 'I don't know' instead of inventing. Budget $2k-3k, must be live before our conference in two weeks."},
+
+  {"board": "forhire", "age_hours": 7.0, "num_comments": 4,
+   "title": "[HIRING] Pitch deck designer needed for seed round - $600",
+   "body": "12 slides, we have the content in a Google Doc but it looks terrible. Investor meetings start next week. Need someone who has done fundraising decks before."},
+
+  {"board": "slavelabour", "age_hours": 9.0, "num_comments": 11,
+   "title": "[TASK] Write 5 SEO blog posts about home fitness - $20 each",
+   "body": "1000 words each, keyword list provided. No AI slop, I check. Paying $100 total for the batch."},
+
+  {"board": "forhire", "age_hours": 12.0, "num_comments": 1,
+   "title": "[HIRING] Excel dashboard from our sales export - budget flexible",
+   "body": "Monthly CSV export from our CRM, want pivot tables and one dashboard tab that updates when I paste new data. Roughly 5,000 rows. Willing to pay for something that just works."},
+
+  {"board": "forhire", "age_hours": 20.0, "num_comments": 8,
+   "title": "Need a React dev to fix a checkout bug - urgent, paying $250",
+   "body": "Stripe checkout throws a 500 on mobile Safari only. Repo is private, will share access. Need it fixed today, paying $250 on a working fix."},
+
+  {"board": "hn", "age_hours": 30.0, "num_comments": 0,
+   "title": "SEEKING FREELANCER | Market research on EU battery recyclers",
+   "body": "Need a sourced list of every battery recycling company in the EU with capacity, funding stage and contact. Roughly 60-100 companies. This feeds an investment decision. $800."},
+
+  {"board": "forhire", "age_hours": 50.0, "num_comments": 22,
+   "title": "[HIRING] WordPress site migration to new host - $150",
+   "body": "Two sites, small, need zero downtime. Paying $150 on completion."},
+
+  {"board": "forhire", "age_hours": 1.0, "num_comments": 5,
+   "title": "[FOR HIRE] Senior full-stack developer, 6 years, React/Node - $45/hr",
+   "body": "Available immediately for contract work. Portfolio in profile, DM me for a quote."},
+
+  {"board": "forhire", "age_hours": 2.0, "num_comments": 2,
+   "title": "Looking for a designer to build our brand - equity only, huge upside",
+   "body": "Pre-seed startup, no budget yet but this is a portfolio piece and we're going to be big. Revenue share possible later."},
+
+  {"board": "slavelabour", "age_hours": 1.2, "num_comments": 0,
+   "title": "Make $500 a day with this simple system - telegram only",
+   "body": "Send me your crypto wallet and I show you the method. Guaranteed profit."},
+
+  {"board": "forhire", "age_hours": 0.9, "num_comments": 0,
+   "title": "need help", "body": "asap pls"}
+]
