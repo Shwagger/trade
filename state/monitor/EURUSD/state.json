@@ -2,9 +2,9 @@
   "symbol": "EURUSD",
   "equity": 9954.609174536896,
   "peak_equity": 10000.0,
-  "last_bar": "2026-08-25 11:00:00+00:00",
+  "last_bar": "2026-08-25 13:00:00+00:00",
   "last_trained_bar": null,
-  "bars_since_train": 53,
+  "bars_since_train": 55,
   "position": null,
   "pending": null,
   "risk": {
