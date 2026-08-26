@@ -2,11 +2,17 @@
   "symbol": "EURUSD",
   "equity": 9954.609174536896,
   "peak_equity": 10000.0,
-  "last_bar": "2026-08-26 09:00:00+00:00",
+  "last_bar": "2026-08-26 11:00:00+00:00",
   "last_trained_bar": null,
-  "bars_since_train": 75,
+  "bars_since_train": 77,
   "position": null,
-  "pending": null,
+  "pending": {
+    "direction": 1,
+    "atr": 0.0005891534906461608,
+    "score": 0.1504832810966113,
+    "confidence": 0.35390689930739616,
+    "decided_at": "2026-08-26 11:00:00+00:00"
+  },
   "risk": {
     "day_start_equity": 9954.609174536896,
     "current_day": "2026-08-26",
