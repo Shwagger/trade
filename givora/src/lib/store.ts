@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getSupabase } from "./supabase";
-import type { GiftRequest, Recipient, Suggestion } from "./types";
+import type { GiftRequest, Recipient, Suggestion, VoteTally } from "./types";
 
 // ---------------------------------------------------------------------
 // Couche d'accès aux données. Une seule porte d'entrée pour le reste de
@@ -10,10 +10,14 @@ import type { GiftRequest, Recipient, Suggestion } from "./types";
 // s'efface à chaque redémarrage — il n'est là que pour le dev local.
 // ---------------------------------------------------------------------
 
+const REQUEST_COLUMNS =
+  "id, recipient_id, occasion, budget_min, budget_max, raw_input, deadline_days, shared_at, created_at";
+
 type MemoryDb = {
   recipients: Map<string, Recipient>;
   requests: Map<string, GiftRequest>;
   suggestions: Map<string, Suggestion[]>; // request_id -> suggestions
+  votes: Map<string, { suggestionId: string; requestId: string; sessionId: string; value: -1 | 1 }>;
 };
 
 // globalThis : Next recharge les modules à chaud en dev, on ne veut pas
@@ -25,6 +29,7 @@ const memory: MemoryDb =
     recipients: new Map(),
     requests: new Map(),
     suggestions: new Map(),
+    votes: new Map(),
   });
 
 export function usingMemoryStore(): boolean {
@@ -79,6 +84,7 @@ export async function createRequest(input: {
   budgetMin: number;
   budgetMax: number | null;
   rawInput: string | null;
+  deadlineDays: number | null;
 }): Promise<GiftRequest> {
   const row: GiftRequest = {
     id: randomUUID(),
@@ -87,6 +93,8 @@ export async function createRequest(input: {
     budget_min: input.budgetMin,
     budget_max: input.budgetMax,
     raw_input: input.rawInput,
+    deadline_days: input.deadlineDays,
+    shared_at: null,
     created_at: new Date().toISOString(),
   };
 
@@ -104,8 +112,9 @@ export async function createRequest(input: {
       budget_min: row.budget_min,
       budget_max: row.budget_max,
       raw_input: row.raw_input,
+      deadline_days: row.deadline_days,
     })
-    .select("id, recipient_id, occasion, budget_min, budget_max, raw_input, created_at")
+    .select(REQUEST_COLUMNS)
     .single();
 
   if (error) throw new Error(`requests insert: ${error.message}`);
@@ -118,7 +127,7 @@ export async function getRequest(id: string): Promise<GiftRequest | null> {
 
   const { data, error } = await db
     .from("requests")
-    .select("id, recipient_id, occasion, budget_min, budget_max, raw_input, created_at")
+    .select(REQUEST_COLUMNS)
     .eq("id", id)
     .maybeSingle();
 
@@ -184,4 +193,100 @@ export async function getSuggestions(requestId: string): Promise<Suggestion[]> {
 
   if (error) throw new Error(`suggestions select: ${error.message}`);
   return (data as Suggestion[]) ?? [];
+}
+
+// --- votes -----------------------------------------------------------
+// Le lien /resultado/[id] partagé dans le groupe WhatsApp devient un
+// sondage : chacun réagit aux trois cartes. Un avis par personne et par
+// carte — revoter écrase, ça ne s'empile pas.
+
+export async function castVote(input: {
+  suggestionId: string;
+  requestId: string;
+  sessionId: string;
+  value: -1 | 1;
+}): Promise<void> {
+  const db = getSupabase();
+
+  if (!db) {
+    memory.votes.set(`${input.suggestionId}:${input.sessionId}`, {
+      suggestionId: input.suggestionId,
+      requestId: input.requestId,
+      sessionId: input.sessionId,
+      value: input.value,
+    });
+    return;
+  }
+
+  const { error } = await db
+    .from("votes")
+    .upsert(
+      {
+        suggestion_id: input.suggestionId,
+        request_id: input.requestId,
+        session_id: input.sessionId,
+        value: input.value,
+      },
+      { onConflict: "suggestion_id,session_id" },
+    );
+
+  if (error) throw new Error(`votes upsert: ${error.message}`);
+}
+
+export async function getTallies(requestId: string, sessionId: string): Promise<VoteTally[]> {
+  const db = getSupabase();
+
+  const rows = db
+    ? await db
+        .from("votes")
+        .select("suggestion_id, session_id, value")
+        .eq("request_id", requestId)
+        .then(({ data, error }) => {
+          if (error) throw new Error(`votes select: ${error.message}`);
+          return (data ?? []) as { suggestion_id: string; session_id: string; value: number }[];
+        })
+    : [...memory.votes.values()]
+        .filter((v) => v.requestId === requestId)
+        .map((v) => ({ suggestion_id: v.suggestionId, session_id: v.sessionId, value: v.value }));
+
+  const byId = new Map<string, VoteTally>();
+  for (const row of rows) {
+    const t = byId.get(row.suggestion_id) ?? {
+      suggestion_id: row.suggestion_id,
+      up: 0,
+      down: 0,
+      mine: null,
+    };
+    if (row.value === 1) t.up += 1;
+    else t.down += 1;
+    if (row.session_id === sessionId) t.mine = row.value === 1 ? 1 : -1;
+    byId.set(row.suggestion_id, t);
+  }
+  return [...byId.values()];
+}
+
+/** Les titres que le groupe a rejetés : ils nourrissent le refinar. */
+export async function rejectedTitles(requestId: string): Promise<string[]> {
+  const [suggestions, tallies] = await Promise.all([
+    getSuggestions(requestId),
+    getTallies(requestId, ""),
+  ]);
+  const down = new Set(tallies.filter((t) => t.down > t.up).map((t) => t.suggestion_id));
+  return suggestions.filter((s) => down.has(s.id)).map((s) => s.title);
+}
+
+/** Trace l'usage réel du partage WhatsApp : la boucle virale existe ou non. */
+export async function markShared(requestId: string): Promise<void> {
+  const db = getSupabase();
+  if (!db) {
+    const r = memory.requests.get(requestId);
+    if (r) r.shared_at = new Date().toISOString();
+    return;
+  }
+  const { error } = await db
+    .from("requests")
+    .update({ shared_at: new Date().toISOString() })
+    .eq("id", requestId)
+    .is("shared_at", null); // on garde le PREMIER partage, pas le dernier
+  if (error) console.error("[store] markShared:", error.message);
 }

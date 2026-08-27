@@ -1,15 +1,33 @@
 import { NextResponse } from "next/server";
-import { getRecipient, getRequest, getSuggestions, replaceSuggestions } from "@/lib/store";
+import {
+  getRecipient,
+  getRequest,
+  getSuggestions,
+  rejectedTitles,
+  replaceSuggestions,
+} from "@/lib/store";
+import { clientIp, hit } from "@/lib/rate-limit";
+import {
+  EngineError,
+  generateWithAnthropic,
+  isEngineConfigured,
+} from "@/lib/recommend/anthropic";
 import { stubSuggestions } from "@/lib/recommend/stub";
 
 // POST /api/recommend  { requestId, feedback? }
 //
-// PHASE 1 : les suggestions viennent d'un catalogue en dur (lib/recommend/stub).
-// PHASE 2 : ce handler appellera l'API Anthropic (claude-sonnet-4-6), validera
-// la sortie avec Zod, retentera une fois si le JSON est invalide, et posera un
-// rate limit par IP. La signature de la route et la forme de la réponse ne
-// changent pas — l'écran de résultats n'aura rien à modifier.
+// Le moteur : Anthropic quand la clé est là, catalogue de secours sinon
+// (dev local sans credentials, et filet si l'API tombe — mieux vaut trois
+// idées correctes qu'une page d'erreur).
 export async function POST(req: Request) {
+  const rate = hit(clientIp(req));
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: "Você pediu muitas ideias seguidas. Respire e tente daqui a pouco." },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } },
+    );
+  }
+
   let body: { requestId?: string; feedback?: string };
   try {
     body = (await req.json()) as { requestId?: string; feedback?: string };
@@ -22,36 +40,74 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "requestId ausente." }, { status: 400 });
   }
 
+  let request, recipient, feedback: string, avoidTitles: string[];
   try {
-    const request = await getRequest(requestId);
+    request = await getRequest(requestId);
     if (!request) {
       return NextResponse.json({ error: "Pedido não encontrado." }, { status: 404 });
     }
 
-    const recipient = request.recipient_id ? await getRecipient(request.recipient_id) : null;
-    const feedback = (body.feedback ?? "").slice(0, 500).trim();
+    recipient = request.recipient_id ? await getRecipient(request.recipient_id) : null;
+    feedback = (body.feedback ?? "").slice(0, 500).trim();
 
-    // "Refinar" : on refuse de resservir exactement le même trio.
-    const previous = feedback ? await getSuggestions(requestId) : [];
-
-    const drafts = stubSuggestions({
-      occasion: request.occasion,
-      interests: recipient?.interests ?? [],
-      // Le "refinar" est simplement concaténé à l'entrée libre. En phase 2
-      // il partira dans un tour de conversation dédié.
-      freeText: [request.raw_input, feedback].filter(Boolean).join(" — "),
-      budgetMin: request.budget_min,
-      budgetMax: request.budget_max,
-      avoidTitles: previous.map((s) => s.title),
-    });
-
-    const suggestions = await replaceSuggestions(requestId, drafts);
-    return NextResponse.json({ suggestions });
+    // Le refinar n'oublie pas ce qui a déjà été proposé, ni ce que le
+    // groupe a descendu dans le vote WhatsApp.
+    avoidTitles = feedback
+      ? [
+          ...(await getSuggestions(requestId)).map((s) => s.title),
+          ...(await rejectedTitles(requestId)),
+        ]
+      : await rejectedTitles(requestId);
   } catch (err) {
-    console.error("[api/recommend]", err);
-    return NextResponse.json(
-      { error: "Não conseguimos gerar as ideias agora. Tente de novo." },
-      { status: 500 },
-    );
+    console.error("[api/recommend] lecture:", err);
+    return NextResponse.json({ error: "Não conseguimos ler seu pedido." }, { status: 500 });
+  }
+
+  const input = {
+    relation: recipient?.relation ?? "outro",
+    ageRange: recipient?.age_range ?? null,
+    interests: recipient?.interests ?? [],
+    freeText: request.raw_input,
+    occasion: request.occasion,
+    budgetMin: request.budget_min,
+    budgetMax: request.budget_max,
+    deadlineDays: request.deadline_days,
+    feedback: feedback || null,
+    avoidTitles: [...new Set(avoidTitles)],
+  };
+
+  let drafts;
+  let engine: "ia" | "catalogo" = "ia";
+
+  if (isEngineConfigured()) {
+    try {
+      drafts = await generateWithAnthropic(input);
+    } catch (err) {
+      console.error("[api/recommend] moteur:", err);
+      const userMessage =
+        err instanceof EngineError ? err.userMessage : "O motor de sugestões falhou.";
+      return NextResponse.json({ error: userMessage }, { status: 502 });
+    }
+  } else {
+    // Pas de clé : on ne casse pas le parcours, on le sert avec le
+    // catalogue. Visible dans la réponse pour ne tromper personne.
+    console.warn("[api/recommend] ANTHROPIC_API_KEY absente — catalogue de secours");
+    engine = "catalogo";
+    drafts = stubSuggestions({
+      occasion: input.occasion,
+      interests: input.interests,
+      freeText: [input.freeText, feedback].filter(Boolean).join(" — "),
+      budgetMin: input.budgetMin,
+      budgetMax: input.budgetMax,
+      avoidTitles: input.avoidTitles,
+    });
+  }
+
+  try {
+    const suggestions = await replaceSuggestions(requestId, drafts);
+    return NextResponse.json({ suggestions, engine });
+  } catch (err) {
+    console.error("[api/recommend] écriture:", err);
+    return NextResponse.json({ error: "Não conseguimos salvar as ideias." }, { status: 500 });
   }
 }

@@ -6,6 +6,7 @@ import { StepShell } from "@/components/StepShell";
 import {
   AGE_RANGES,
   BUDGETS,
+  DEADLINES,
   INTEREST_CHIPS,
   OCCASIONS,
   RELATIONS,
@@ -26,6 +27,7 @@ export default function Home() {
   const [interests, setInterests] = useState<string[]>([]);
   const [freeText, setFreeText] = useState("");
   const [occasion, setOccasion] = useState("");
+  const [deadlineId, setDeadlineId] = useState("sem-pressa");
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +45,9 @@ export default function Home() {
       const res = await fetch("/api/request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ relation, ageRange, interests, freeText, occasion, budgetId }),
+        body: JSON.stringify({
+          relation, ageRange, interests, freeText, occasion, budgetId, deadlineId,
+        }),
       });
       if (!res.ok) throw new Error("request failed");
       const { requestId } = (await res.json()) as { requestId: string };
@@ -194,6 +198,27 @@ export default function Home() {
       subtitle={`Vamos achar três ideias para ${relationLabel(relation).toLowerCase()}.`}
       onBack={() => setStep(3)}
     >
+      {/* Le prazo tient sur le même écran que le budget : ce sont les
+          deux contraintes dures, et un cinquième écran coûterait plus
+          d'abandons qu'il ne rapporte. */}
+      <div className="mb-6">
+        <p className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink/40">
+          Precisa chegar até quando?
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {DEADLINES.map((d) => (
+            <button
+              key={d.id}
+              type="button"
+              className={`chip ${deadlineId === d.id ? "chip-selected" : ""}`}
+              onClick={() => setDeadlineId(d.id)}
+            >
+              {d.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="space-y-3">
         {BUDGETS.map((b) => (
           <button

@@ -22,6 +22,9 @@ export type GiftRequest = {
   budget_min: number;
   budget_max: number | null;
   raw_input: string | null;
+  /** Jours avant l'événement. null = sans pressa. */
+  deadline_days: number | null;
+  shared_at: string | null;
   created_at: string;
 };
 
@@ -42,4 +45,14 @@ export type RequestPayload = {
   freeText: string;
   occasion: string;
   budgetId: string;
+  deadlineId: string;
+};
+
+/** Décompte des votes du groupe, par suggestion. */
+export type VoteTally = {
+  suggestion_id: string;
+  up: number;
+  down: number;
+  /** Le vote de CE visiteur, s'il en a déjà donné un. */
+  mine: -1 | 1 | null;
 };

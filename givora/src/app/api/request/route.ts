@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { budgetById } from "@/lib/constants";
+import { budgetById, deadlineById } from "@/lib/constants";
 import { createRecipient, createRequest } from "@/lib/store";
 import type { RequestPayload } from "@/lib/types";
 
@@ -23,6 +23,7 @@ export async function POST(req: Request) {
   }
 
   const budget = budgetById(body.budgetId);
+  const deadline = deadlineById(body.deadlineId);
   const interests = Array.isArray(body.interests) ? body.interests.slice(0, 20) : [];
   const freeText = (body.freeText ?? "").slice(0, 1000).trim();
 
@@ -41,6 +42,7 @@ export async function POST(req: Request) {
       budgetMin: budget.min,
       budgetMax: budget.max,
       rawInput: freeText || null,
+      deadlineDays: deadline.days,
     });
 
     return NextResponse.json({ requestId: request.id });

@@ -1,9 +1,22 @@
+"use client";
+
 import { MARKETPLACE_CTA } from "@/lib/constants";
 import { searchUrl } from "@/lib/marketplace";
-import type { Suggestion } from "@/lib/types";
+import type { Suggestion, VoteTally } from "@/lib/types";
 
-export function SuggestionCard({ suggestion }: { suggestion: Suggestion }) {
+export function SuggestionCard({
+  suggestion,
+  tally,
+  onVote,
+}: {
+  suggestion: Suggestion;
+  tally: VoteTally | undefined;
+  onVote: (suggestionId: string, value: 1 | -1) => void;
+}) {
   const cta = MARKETPLACE_CTA[suggestion.marketplace] ?? "Ver na loja";
+  const up = tally?.up ?? 0;
+  const down = tally?.down ?? 0;
+  const mine = tally?.mine ?? null;
 
   return (
     <article className="rounded-3xl border-2 border-ink/10 bg-white p-5 shadow-sm">
@@ -38,6 +51,54 @@ export function SuggestionCard({ suggestion }: { suggestion: Suggestion }) {
       >
         {cta}
       </a>
+
+      {/* Le vote du groupe. C'est ce qui transforme un lien partagé dans
+          le WhatsApp de la famille en conversation sur la page. */}
+      <div className="mt-3 flex items-center gap-2">
+        <VoteButton
+          active={mine === 1}
+          count={up}
+          label="Curti essa"
+          emoji="👍"
+          onClick={() => onVote(suggestion.id, 1)}
+        />
+        <VoteButton
+          active={mine === -1}
+          count={down}
+          label="Essa não"
+          emoji="👎"
+          onClick={() => onVote(suggestion.id, -1)}
+        />
+      </div>
     </article>
+  );
+}
+
+function VoteButton({
+  active,
+  count,
+  label,
+  emoji,
+  onClick,
+}: {
+  active: boolean;
+  count: number;
+  label: string;
+  emoji: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      aria-label={label}
+      className={`flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-2xl border-2 text-base font-semibold transition active:scale-95 ${
+        active ? "border-coral bg-coral/10 text-coral-dark" : "border-ink/10 bg-white text-ink/60"
+      }`}
+    >
+      <span aria-hidden>{emoji}</span>
+      <span className="tabular-nums">{count}</span>
+    </button>
   );
 }

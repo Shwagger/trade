@@ -69,6 +69,25 @@ export const BUDGETS = [
   { id: "300-mais", label: "R$ 300 ou mais", hint: "sem limite", min: 300, max: null },
 ] as const;
 
+// « Precisa chegar até quando ? » — la vraie angoisse du cadeau n'est pas
+// le goût, c'est le retard. Le moteur s'en sert pour privilégier le
+// numérique quand le délai est court.
+export const DEADLINES = [
+  { id: "sem-pressa", label: "Sem pressa", days: null },
+  { id: "semana", label: "Esta semana", days: 7 },
+  { id: "3-dias", label: "Em 3 dias", days: 3 },
+  { id: "amanha", label: "É pra amanhã", days: 1 },
+] as const;
+
+export function deadlineById(id: string) {
+  return DEADLINES.find((d) => d.id === id) ?? DEADLINES[0];
+}
+
+export function deadlineLabelFor(days: number | null): string | null {
+  if (days === null) return null;
+  return DEADLINES.find((d) => d.days === days)?.label ?? `Em ${days} dias`;
+}
+
 export const MARKETPLACE_LABELS: Record<string, string> = {
   amazon_br: "Amazon",
   mercado_livre: "Mercado Livre",
