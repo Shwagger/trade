@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-cream text-ink antialiased;
+  /* iOS : on veut que le fond descende sous la barre du bas. */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Cible tactile minimale : 44px, partout. */
+@layer components {
+  .touch-card {
+    @apply flex min-h-[60px] w-full items-center gap-3 rounded-2xl border-2 border-ink/10
+           bg-white px-4 py-4 text-left text-lg font-medium shadow-sm
+           transition active:scale-[0.98] active:border-coral;
+  }
+  .touch-card-selected {
+    @apply border-coral bg-coral/5;
+  }
+  .chip {
+    @apply rounded-full border-2 border-ink/10 bg-white px-4 py-2 text-base font-medium
+           transition active:scale-95;
+  }
+  .chip-selected {
+    @apply border-coral bg-coral text-white;
+  }
+  .primary-btn {
+    @apply flex min-h-[56px] w-full items-center justify-center rounded-2xl bg-coral px-6
+           text-lg font-semibold text-white shadow-lg shadow-coral/25 transition
+           active:scale-[0.98] disabled:opacity-40 disabled:shadow-none;
+  }
+}
