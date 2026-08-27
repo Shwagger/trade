@@ -21,7 +21,9 @@ export function StepShell({
   footer?: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen flex-col py-5">
+    // key sur l'étape : React remonte le nœud à chaque question, donc
+    // l'animation d'entrée se rejoue. Sans ça elle ne joue qu'une fois.
+    <div key={step} className="screen-enter flex min-h-screen flex-col py-5">
       <header className="mb-6 space-y-4">
         <div className="flex items-center gap-3">
           {onBack ? (

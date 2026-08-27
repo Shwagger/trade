@@ -10,6 +10,9 @@ import type { GiftRequest, Recipient, Suggestion, VoteTally } from "./types";
 // s'efface à chaque redémarrage — il n'est là que pour le dev local.
 // ---------------------------------------------------------------------
 
+const SUGGESTION_COLUMNS =
+  "id, request_id, title, reason, category, search_query, price_range, marketplace, position";
+
 const REQUEST_COLUMNS =
   "id, recipient_id, occasion, budget_min, budget_max, raw_input, deadline_days, shared_at, created_at";
 
@@ -18,6 +21,8 @@ type MemoryDb = {
   requests: Map<string, GiftRequest>;
   suggestions: Map<string, Suggestion[]>; // request_id -> suggestions
   votes: Map<string, { suggestionId: string; requestId: string; sessionId: string; value: -1 | 1 }>;
+  clicks: { id: string; suggestion_id: string; clicked_at: string; session_id: string | null }[];
+  sessions: Map<string, { session_id: string; first_seen: string; source: Record<string, string>; pages_viewed: number }>;
 };
 
 // globalThis : Next recharge les modules à chaud en dev, on ne veut pas
@@ -30,6 +35,8 @@ const memory: MemoryDb =
     requests: new Map(),
     suggestions: new Map(),
     votes: new Map(),
+    clicks: [],
+    sessions: new Map(),
   });
 
 export function usingMemoryStore(): boolean {
@@ -174,7 +181,7 @@ export async function replaceSuggestions(
   const { data, error } = await db
     .from("suggestions")
     .insert(drafts.map((d) => ({ ...d, request_id: requestId })))
-    .select("id, request_id, title, reason, category, search_query, price_range, marketplace, position")
+    .select(SUGGESTION_COLUMNS)
     .order("position");
 
   if (error) throw new Error(`suggestions insert: ${error.message}`);
@@ -187,7 +194,7 @@ export async function getSuggestions(requestId: string): Promise<Suggestion[]> {
 
   const { data, error } = await db
     .from("suggestions")
-    .select("id, request_id, title, reason, category, search_query, price_range, marketplace, position")
+    .select(SUGGESTION_COLUMNS)
     .eq("request_id", requestId)
     .order("position");
 
@@ -289,4 +296,89 @@ export async function markShared(requestId: string): Promise<void> {
     .eq("id", requestId)
     .is("shared_at", null); // on garde le PREMIER partage, pas le dernier
   if (error) console.error("[store] markShared:", error.message);
+}
+
+// --- clicks & sessions -----------------------------------------------
+// La métrique n°1 du produit : session -> clic sortant. `clicks` est le
+// numérateur, `sessions` le dénominateur. Sans les deux, le taux de clic
+// est une opinion.
+
+export async function getSuggestionById(id: string): Promise<Suggestion | null> {
+  const db = getSupabase();
+
+  if (!db) {
+    for (const list of memory.suggestions.values()) {
+      const found = list.find((s) => s.id === id);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  const { data, error } = await db
+    .from("suggestions")
+    .select(SUGGESTION_COLUMNS)
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) throw new Error(`suggestions select by id: ${error.message}`);
+  return (data as Suggestion | null) ?? null;
+}
+
+export async function recordClick(input: {
+  suggestionId: string;
+  referrer: string | null;
+  userAgent: string | null;
+  sessionId: string | null;
+}): Promise<void> {
+  const db = getSupabase();
+
+  if (!db) {
+    memory.clicks.push({
+      id: randomUUID(),
+      suggestion_id: input.suggestionId,
+      clicked_at: new Date().toISOString(),
+      session_id: input.sessionId,
+    });
+    return;
+  }
+
+  const { error } = await db.from("clicks").insert({
+    suggestion_id: input.suggestionId,
+    referrer: input.referrer,
+    user_agent: input.userAgent,
+    session_id: input.sessionId,
+  });
+
+  // Un clic non enregistré ne doit JAMAIS empêcher la redirection :
+  // on perd une mesure, pas une commission.
+  if (error) console.error("[store] recordClick:", error.message);
+}
+
+export async function touchSession(input: {
+  sessionId: string;
+  source: Record<string, string>;
+}): Promise<void> {
+  const db = getSupabase();
+
+  if (!db) {
+    const existing = memory.sessions.get(input.sessionId);
+    if (existing) existing.pages_viewed += 1;
+    else
+      memory.sessions.set(input.sessionId, {
+        session_id: input.sessionId,
+        first_seen: new Date().toISOString(),
+        source: input.source,
+        pages_viewed: 1,
+      });
+    return;
+  }
+
+  // On garde first_seen et la source d'ORIGINE : un partage WhatsApp ne
+  // doit pas réécrire l'attribution de la campagne qui a amené la personne.
+  const { error } = await db.rpc("givora_touch_session", {
+    p_session_id: input.sessionId,
+    p_source: input.source,
+  });
+
+  if (error) console.error("[store] touchSession:", error.message);
 }

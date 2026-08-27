@@ -1,7 +1,6 @@
 "use client";
 
 import { MARKETPLACE_CTA } from "@/lib/constants";
-import { searchUrl } from "@/lib/marketplace";
 import type { Suggestion, VoteTally } from "@/lib/types";
 
 export function SuggestionCard({
@@ -38,13 +37,10 @@ export function SuggestionCard({
         {suggestion.reason}
       </p>
 
-      {/*
-        PHASE 3 : ce href deviendra /go/{suggestion.id} — enregistrement du
-        clic dans `clicks` puis 302 vers l'URL affiliée. rel et target sont
-        déjà en place pour que rien ne change côté markup ce jour-là.
-      */}
+      {/* Tous les liens sortants passent par /go/[id] : le clic est
+          mesuré et l'URL affiliée n'apparaît jamais dans le HTML. */}
       <a
-        href={searchUrl(suggestion.marketplace, suggestion.search_query)}
+        href={`/go/${suggestion.id}`}
         target="_blank"
         rel="sponsored nofollow noopener"
         className="primary-btn mt-4"

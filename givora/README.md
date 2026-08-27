@@ -1,13 +1,13 @@
-# Givora — phase 1
+# Givora
 
-Site mobile-first en portugais brésilien : l'utilisateur décrit une personne en
-quatre écrans, on lui rend trois idées de cadeau avec une phrase de
-justification et un lien vers le marketplace.
+Site mobile-first en portugais brésilien, installable comme une app :
+l'utilisateur décrit une personne en quatre écrans, une IA rend trois idées de
+cadeau avec une phrase de justification, et chaque lien sortant est mesuré et
+monétisé.
 
-**Ce dépôt contient la phase 1 uniquement** : le parcours complet, la
-persistance et le schéma de base. Le moteur IA (phase 2) et l'affiliation +
-tracking (phase 3) ne sont pas encore là — voir « Ce qui n'est PAS fait » plus
-bas.
+**La métrique du produit est le taux de clic sortant** (session → clic
+marchand). C'est le chiffre en haut de `/admin`, et tout le reste sert à
+l'expliquer.
 
 ## Démarrer
 
@@ -16,20 +16,17 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
-Sans variables d'environnement, l'app tourne quand même : le store bascule sur
-une version **en mémoire** (voir `src/lib/store.ts`), pratique pour regarder le
-parcours tout de suite. Tout est perdu au redémarrage du serveur.
-
-Pour brancher Supabase :
+Sans variables d'environnement, l'app tourne quand même : le store bascule en
+mémoire et le moteur sert un catalogue de secours. Pour le vrai comportement :
 
 ```bash
-cp .env.example .env.local   # puis remplir les deux variables
+cp .env.example .env.local   # puis remplir
 ```
 
-et appliquer `supabase/migrations/0001_init.sql` (SQL editor Supabase, ou
-`supabase db push`).
+puis appliquer les migrations de `supabase/migrations/` dans l'ordre (SQL editor
+Supabase, ou `supabase db push`).
 
-Autres commandes : `npm run build`, `npm run lint`, `npm run typecheck`.
+Commandes : `npm run build`, `npm run lint`, `npm run typecheck`, `npm test`.
 
 ## Le parcours
 
@@ -38,61 +35,112 @@ Autres commandes : `npm run build`, `npm run lint`, `npm run typecheck`.
 | 1 | `/` | Quem vai ganhar o presente ? — 12 relations, un tap = écran suivant |
 | 2 | `/` | Idade + o que curte — chips d'âge, champ libre, 20 chips d'intérêt |
 | 3 | `/` | Qual é a ocasião ? — 7 occasions, un tap = écran suivant |
-| 4 | `/` | Quanto quer gastar ? — 4 tranches, le tap déclenche l'envoi |
-| → | `/resultado/[requestId]` | Les 3 cartes, « refinar », partage WhatsApp |
+| 4 | `/` | Prazo + orçamento — le tap sur le budget déclenche l'envoi |
+| → | `/resultado/[requestId]` | 3 cartes, vote du groupe, refinar, partage WhatsApp |
+| → | `/go/[suggestionId]` | Enregistre le clic, redirige 302 vers l'URL affiliée |
+| → | `/admin` | Taux de clic, sessions, marketplaces, top suggestions |
 
-Sept taps et une phrase tapée du début à la fin. Les quatre écrans vivent dans
-un seul composant client (`src/app/page.tsx`) : quatre `useState` et un index
-d'étape, aucun state manager.
+Sept taps et une phrase du début à la fin.
+
+## Le moteur (phase 2)
+
+`/api/recommend` appelle Anthropic via `messages.parse` + `zodOutputFormat` : la
+sortie est contrainte au schéma côté serveur, on ne parse pas du JSON à la main
+dans du texte.
+
+Le schéma garantit la forme, pas le produit. `src/lib/recommend/schema.ts`
+revalide ce qui compte vraiment :
+
+- trois catégories **différentes** ;
+- `reason` en **une seule phrase**, qui cite un détail donné par l'utilisateur ;
+- pas de langue de pub (« presente perfeito », « vai amar »… sont rejetés) ;
+- `search_query` de 2 à 5 mots ;
+- le prix affiché tient dans le budget.
+
+Si une règle saute, on relance **une fois** en disant au modèle ce qui a été
+rejeté — relancer à l'identique ne corrige rien. Après ça on sert quand même :
+trois idées imparfaites valent mieux qu'une page d'erreur.
+
+Rate limit par IP, timeout 20 s, erreurs du SDK traduites en PT-BR.
+Sans `ANTHROPIC_API_KEY`, le catalogue de secours prend le relais et la réponse
+dit quel moteur a répondu (`engine: "ia" | "catalogo"`).
+
+## L'affiliation (phase 3)
+
+**`src/lib/affiliates.ts` est le seul fichier à toucher.** Une entrée par
+marketplace, chaque ligne commentée, avec le degré de confiance du format
+indiqué honnêtement — Amazon et Magalu sont sûrs, Mercado Livre et Shopee sont
+à vérifier dans ton panneau affilié avant de compter sur la commission.
+
+Deux choses que ce fichier fait et qui comptent :
+
+1. **Le filtre de prix est injecté dans l'URL** (`low-price`/`high-price` chez
+   Amazon, `_PriceRange_` chez Mercado Livre, `minPrice` chez Shopee). Sans lui
+   l'utilisateur atterrit sur une page de résultats où la moitié des produits
+   est hors budget, et il repart.
+2. **L'URL marchande ne sort jamais dans le HTML.** Tous les liens pointent sur
+   `/go/[suggestionId]`, qui enregistre le clic puis redirige en 302. Le tag
+   n'est pas lisible dans le code source, et changer de programme
+   d'affiliation ne demande pas de re-rendre une seule carte.
+
+### Aller jusqu'au produit exact
+
+Les liens visent aujourd'hui une **page de résultats filtrée**, pas une fiche
+produit : atteindre la fiche demande les API produit des marchands (Amazon
+PA-API, API Mercado Livre), qui ont chacune leur inscription et leurs
+credentials. C'est un choix conscient, pas un raccourci — un lien produit deviné
+tombe en 404 ou sur une rupture de stock, ce qui coûte plus de commissions qu'il
+n'en rapporte. Quand les credentials seront là, la résolution s'insère dans
+`buildAffiliateUrl` sans toucher au reste.
+
+## Ce qui nous démarque
+
+Quatre choses que les « AI gift finder » concurrents ne font pas :
+
+1. **On lui rend ses propres mots.** La phrase qu'il a tapée est affichée en
+   citation au-dessus des cartes, et chaque justification doit citer un détail
+   qu'il a réellement donné — c'est une règle vérifiée côté serveur, pas une
+   consigne polie dans un prompt.
+2. **Le prazo.** « Precisa chegar até quando ? » : sous deux jours le moteur
+   privilégie le numérique. Le retard est la vraie angoisse du cadeau.
+3. **Le vote du groupe.** Le lien partagé dans le WhatsApp de la famille devient
+   un sondage : 👍/👎 par carte, un avis par personne, décompte visible. Les
+   cartes descendues nourrissent le refinar. C'est la boucle de croissance, et
+   `requests.shared_at` mesure si elle existe vraiment.
+4. **Installable.** Manifeste PWA, `display: standalone`, icônes, safe areas, et
+   les trois détails qui trahissent un site web au toucher (flash gris au tap,
+   rubber-band, sélection de texte involontaire) sont neutralisés.
 
 ## Architecture
 
 ```
 src/
   app/
-    page.tsx                      formulaire 4 étapes (client)
-    resultado/[requestId]/page.tsx  composant serveur : lit la demande en base
-    api/request/route.ts          crée recipient + request, renvoie l'id
-    api/recommend/route.ts        génère les 3 suggestions et les persiste
-  components/
-    StepShell.tsx / Progress.tsx  gabarit commun aux 4 écrans
-    ResultView.tsx                cartes, skeleton, refinar, WhatsApp (client)
-    SuggestionCard.tsx            une carte
-    SuggestionSkeleton.tsx        même gabarit que la carte, en gris
+    page.tsx                        formulaire 4 étapes (client)
+    resultado/[requestId]/page.tsx  composant serveur : demande + votes
+    go/[suggestionId]/route.ts      clic -> 302 affilié
+    admin/                          panneau, mot de passe par env
+    api/request | recommend | vote | share | session | admin-login
+    manifest.ts                     PWA
+  components/                       StepShell, ResultView, SuggestionCard…
   lib/
-    constants.ts                  TOUTES les options du formulaire
-    store.ts                      accès données (Supabase, sinon mémoire)
-    supabase.ts                   client service_role, serveur uniquement
-    marketplace.ts                PROVISOIRE — remplacé par affiliates.ts en phase 3
-    recommend/stub.ts             PROVISOIRE — remplacé par l'appel Anthropic en phase 2
-supabase/migrations/0001_init.sql  les 6 tables, RLS activée partout
+    affiliates.ts                   ⚠️ LE fichier de config affiliation
+    recommend/{anthropic,prompt,schema,stub}.ts
+    store.ts                        Supabase, sinon mémoire
+    rate-limit.ts  session.ts  admin-stats.ts  constants.ts
+  middleware.ts                     cookie session_id + source utm
+supabase/migrations/                0001 schéma, 0002 votes+prazo, 0003 RPC
+tests/schema.test.mjs               règles produit du moteur
 ```
 
-Deux routes séparées et pas une seule, volontairement : `/api/request` écrit la
-demande en base **avant** que le moteur tourne. Si le moteur tombe, la demande
-est quand même enregistrée — c'est la seule façon de mesurer les abandons plus
-tard.
+## Limites connues
 
-La migration crée les six tables du modèle (`recipients`, `requests`,
-`suggestions`, `clicks`, `sessions`, `reminders`), y compris celles que les
-phases 2 et 3 utiliseront, pour ne pas re-migrer deux fois.
-
-## Ce qui n'est PAS fait (par design)
-
-- **Phase 2 — moteur IA.** `src/lib/recommend/stub.ts` est un catalogue de 12
-  produits en dur, avec un score par mots-clés. Il respecte déjà les contraintes
-  produit (3 catégories différentes, une phrase de justification qui cite un
-  détail donné par l'utilisateur, filtrage par budget) pour que le rendu final
-  soit réaliste, mais **ce n'est pas de l'IA**. En phase 2, `/api/recommend`
-  appellera Anthropic, validera avec Zod, retentera une fois, et posera un rate
-  limit par IP. Le contrat de sortie ne bouge pas : rien d'autre à modifier.
-- **Phase 3 — affiliation et tracking.** Les boutons pointent aujourd'hui
-  directement vers l'URL de recherche publique du marketplace, sans tag
-  (`src/lib/marketplace.ts`). `rel="sponsored nofollow noopener"` et
-  `target="_blank"` sont déjà posés. En phase 3 : `lib/affiliates.ts`,
-  redirection via `/go/[suggestionId]`, middleware `session_id`, page `/admin`.
-  Les tables `clicks` et `sessions` existent déjà et sont vides.
-
-Limite connue du stub : sur « R$ 300 ou plus », les fourchettes de prix affichées
-sont hautes alors que le catalogue est du milieu de gamme. Le vrai moteur choisit
-des produits adaptés au budget — ça se règle en phase 2.
+- **Le rate limit est par instance**, pas global : sur Vercel chaque instance a
+  sa mémoire. Ça arrête un script naïf, pas un attaquant. Un compteur partagé
+  (Postgres ou Upstash) quand le trafic le justifiera — seule l'implémentation
+  de `hit()` change.
+- **Le catalogue de secours** (`recommend/stub.ts`) est du dépannage, pas un
+  produit : 12 articles en dur. Il ne sert que sans clé API ou si le moteur
+  tombe.
+- **Les formats d'affiliation Mercado Livre et Shopee sont à confirmer** dans
+  les panneaux respectifs (voir les commentaires du fichier).
