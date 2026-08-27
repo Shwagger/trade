@@ -12,7 +12,7 @@ const config: Config = {
         mint: "#0FA97F",
       },
       fontFamily: {
-        sans: ["system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],
+        sans: ["var(--font-archivo)", "Helvetica Neue", "Arial", "sans-serif"],
       },
     },
   },

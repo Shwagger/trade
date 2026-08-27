@@ -17,6 +17,12 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Les questions passent en Archivo élargi : c'est là que la marque parle. */
+h1 {
+  font-variation-settings: "wdth" 112;
+  letter-spacing: -0.02em;
+}
+
 /* Cible tactile minimale : 44px, partout. */
 @layer components {
   .touch-card {

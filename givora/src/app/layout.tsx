@@ -1,5 +1,16 @@
 import type { Metadata, Viewport } from "next";
+import { Archivo } from "next/font/google";
 import "./globals.css";
+
+// Archivo (Omnibus-Type, Buenos Aires) : une grotesque dessinée pour les
+// langues latino-américaines, avec un axe de largeur. La version large
+// porte les questions, la normale le reste. system-ui ne choisissait rien.
+const archivo = Archivo({
+  subsets: ["latin", "latin-ext"],
+  axes: ["wdth"],
+  variable: "--font-archivo",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Givora — ideias de presente em 30 segundos",
@@ -17,7 +28,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" className={archivo.variable}>
       <body>
         <div className="mx-auto flex min-h-screen w-full max-w-lg flex-col px-5">
           {children}
