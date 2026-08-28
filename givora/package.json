@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsc -p tsconfig.test.json && node tests/engine.test.cjs"
+    "test": "tsc -p tsconfig.test.json && node tests/engine.test.cjs",
+    "build:proto": "tsc -p tsconfig.proto.json"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",

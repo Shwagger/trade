@@ -1,0 +1,17 @@
+{
+  // Compile le moteur en ESM navigateur pour le prototype de démo.
+  // Le prototype exécute ainsi le MÊME code que le serveur, au lieu
+  // d'une réécriture à la main qui divergerait au premier changement.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "module": "es2020",
+    "moduleResolution": "bundler",
+    "target": "es2022",
+    "outDir": ".proto-build",
+    "incremental": false,
+    "declaration": false,
+    "plugins": []
+  },
+  "include": ["src/lib/engine/**/*.ts"]
+}
