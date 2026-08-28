@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-cream text-ink antialiased;
+  /* iOS : on veut que le fond descende sous la barre du bas. */
+  padding-bottom: env(safe-area-inset-bottom);
+
+  /* Les trois détails qui trahissent un site web sur un téléphone.
+     Sans eux, aucune quantité de design ne donne l'impression d'une app. */
+
+  /* 1. Le flash gris translucide au tap. Personne ne le remarque
+        consciemment, tout le monde le sent. */
+  -webkit-tap-highlight-color: transparent;
+
+  /* 2. Le rebond élastique quand on tire au-delà du haut de la page,
+        qui laisse voir le fond du navigateur. */
+  overscroll-behavior-y: none;
+
+  /* 3. La sélection de texte qui se déclenche sur un appui un peu long
+        et fait apparaître le menu copier/coller au milieu du parcours.
+        Le texte des résultats reste sélectionnable, lui (voir plus bas). */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Ce que l'utilisateur a de bonnes raisons de vouloir copier reste
+   sélectionnable : les idées de cadeau et les champs de saisie. */
+article,
+blockquote,
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Chaque écran entre par la droite. Une app a une direction, une page web
+   se contente d'apparaître. 160 ms : assez pour être perçu, trop court
+   pour être attendu. */
+@keyframes screen-in {
+  from {
+    opacity: 0;
+    transform: translate3d(14px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.screen-enter {
+  animation: screen-in 160ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen-enter {
+    animation: none;
+  }
+}
+
+/* Les questions passent en Archivo élargi : c'est là que la marque parle. */
+h1 {
+  font-variation-settings: "wdth" 112;
+  letter-spacing: -0.02em;
+}
+
+/* Cible tactile minimale : 44px, partout. */
+@layer components {
+  .touch-card {
+    @apply flex min-h-[60px] w-full items-center gap-3 rounded-2xl border-2 border-ink/10
+           bg-white px-4 py-4 text-left text-lg font-medium shadow-sm
+           transition active:scale-[0.98] active:border-coral;
+  }
+  .touch-card-selected {
+    @apply border-coral bg-coral/5;
+  }
+  .chip {
+    @apply rounded-full border-2 border-ink/10 bg-white px-4 py-2 text-base font-medium
+           transition active:scale-95;
+  }
+  .chip-selected {
+    @apply border-coral bg-coral text-white;
+  }
+  .primary-btn {
+    @apply flex min-h-[56px] w-full items-center justify-center rounded-2xl bg-coral px-6
+           text-lg font-semibold text-white shadow-lg shadow-coral/25 transition
+           active:scale-[0.98] disabled:opacity-40 disabled:shadow-none;
+  }
+}
