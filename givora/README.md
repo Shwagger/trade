@@ -1,9 +1,9 @@
 # Givora
 
 Site mobile-first en portugais brésilien, installable comme une app :
-l'utilisateur décrit une personne en quatre écrans, une IA rend trois idées de
-cadeau avec une phrase de justification, et chaque lien sortant est mesuré et
-monétisé.
+l'utilisateur décrit une personne en quatre écrans, un algorithme local rend
+trois idées de cadeau avec une phrase de justification, et chaque lien sortant
+est mesuré et monétisé. Aucun coût par recherche.
 
 **La métrique du produit est le taux de clic sortant** (session → clic
 marchand). C'est le chiffre en haut de `/admin`, et tout le reste sert à
