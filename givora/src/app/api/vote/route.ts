@@ -1,42 +1,47 @@
 import { NextResponse } from "next/server";
-import { castVote, getSuggestions, getTallies } from "@/lib/store";
+import { suggestionsFromToken } from "@/lib/build-suggestions";
+import { decodeToken, requestKey } from "@/lib/token";
+import { castVote, getTallies } from "@/lib/store";
 import { sessionIdFrom } from "@/lib/session";
 
-// POST /api/vote  { requestId, suggestionId, value: 1 | -1 }
+// POST /api/vote  { token, position: 1 | 2 | 3, value: 1 | -1 }
 //
 // Le cœur du partage WhatsApp : le groupe vote sur les trois cartes.
-// Renvoie le décompte à jour pour que l'écran se mette à jour sans
-// recharger.
+//
+// La validation se fait contre le JETON, pas contre la base : depuis que
+// l'état vit dans l'URL, plus rien n'écrit les suggestions avant un vote.
+// On reconstruit donc les trois cartes depuis le lien et on vérifie que
+// la position existe — ce qui marche aussi quand Supabase est absent.
 export async function POST(req: Request) {
   const sessionId = sessionIdFrom(req);
   if (!sessionId) {
     return NextResponse.json({ error: "Sessão não encontrada. Recarregue a página." }, { status: 400 });
   }
 
-  let body: { requestId?: string; suggestionId?: string; value?: number };
+  let body: { token?: string; position?: number; value?: number };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "JSON inválido." }, { status: 400 });
   }
 
-  const requestId = (body.requestId ?? "").trim();
-  const suggestionId = (body.suggestionId ?? "").trim();
+  const token = (body.token ?? "").trim();
+  const payload = decodeToken(token);
+  const position = Number(body.position);
   const value = body.value === 1 ? 1 : body.value === -1 ? -1 : null;
 
-  if (!requestId || !suggestionId || value === null) {
+  if (!payload || ![1, 2, 3].includes(position) || value === null) {
     return NextResponse.json({ error: "Voto inválido." }, { status: 400 });
   }
 
-  try {
-    // La suggestion doit bien appartenir à cette demande : sans ça
-    // n'importe qui peut voter sur la carte de quelqu'un d'autre.
-    const suggestions = await getSuggestions(requestId);
-    if (!suggestions.some((s) => s.id === suggestionId)) {
-      return NextResponse.json({ error: "Sugestão não encontrada." }, { status: 404 });
-    }
+  const requestId = requestKey(token);
+  const suggestion = suggestionsFromToken(token, payload).find((s) => s.position === position);
+  if (!suggestion) {
+    return NextResponse.json({ error: "Sugestão não encontrada." }, { status: 404 });
+  }
 
-    await castVote({ suggestionId, requestId, sessionId, value });
+  try {
+    await castVote({ suggestionId: suggestion.id, requestId, sessionId, value });
     return NextResponse.json({ tallies: await getTallies(requestId, sessionId) });
   } catch (err) {
     console.error("[api/vote]", err);

@@ -14,7 +14,7 @@ export function SuggestionCard({
   tally: VoteTally | undefined;
   /** Lien sortant, toujours via /go — jamais l'URL marchande. */
   href: string;
-  onVote: (suggestionId: string, value: 1 | -1) => void;
+  onVote: (suggestionId: string, position: number, value: 1 | -1) => void;
 }) {
   const cta = MARKETPLACE_CTA[suggestion.marketplace] ?? "Ver na loja";
   const visual = visualFor(suggestion.category, suggestion.glyph);
@@ -76,14 +76,14 @@ export function SuggestionCard({
           count={up}
           label="Curti essa"
           emoji="👍"
-          onClick={() => onVote(suggestion.id, 1)}
+          onClick={() => onVote(suggestion.id, suggestion.position, 1)}
         />
         <VoteButton
           active={mine === -1}
           count={down}
           label="Essa não"
           emoji="👎"
-          onClick={() => onVote(suggestion.id, -1)}
+          onClick={() => onVote(suggestion.id, suggestion.position, -1)}
         />
       </div>
       </div>

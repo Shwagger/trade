@@ -104,7 +104,7 @@ export function ResultView({
     return () => document.removeEventListener("visibilitychange", refresh);
   }, [requestId, suggestions.length]);
 
-  async function vote(suggestionId: string, value: 1 | -1) {
+  async function vote(suggestionId: string, position: number, value: 1 | -1) {
     // Optimiste : le compteur bouge tout de suite, le serveur confirme.
     setTallies((prev) => {
       const next = prev.filter((t) => t.suggestion_id !== suggestionId);
@@ -125,7 +125,7 @@ export function ResultView({
       const res = await fetch("/api/vote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId, suggestionId, value }),
+        body: JSON.stringify({ token, position, value }),
       });
       if (res.ok) setTallies(((await res.json()) as { tallies: VoteTally[] }).tallies);
     } catch {
