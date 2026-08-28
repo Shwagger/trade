@@ -9,38 +9,39 @@ monétisé.
 marchand). C'est le chiffre en haut de `/admin`, et tout le reste sert à
 l'expliquer.
 
-## Démarrer
+## Mettre en ligne — aucune configuration requise
+
+Le moteur étant déterministe, **l'état de la demande tient dans l'URL** : le
+lien `/resultado/<jeton>` contient ce que l'utilisateur a répondu, et les trois
+cartes sont recalculées à l'affichage. Aucune base de données n'est nécessaire
+pour que le site fonctionne.
+
+1. Sur Vercel, importe le dépôt.
+2. **Root Directory : `givora`** (le dépôt contient aussi un autre projet à la
+   racine, sinon le build échoue).
+3. Déploie. C'est tout — pas une seule variable d'environnement.
+
+Un lien partagé dans un groupe WhatsApp affiche les mêmes trois cartes pour tout
+le monde, aujourd'hui et dans six mois.
+
+### Ensuite, dans cet ordre
+
+| Variable | Ce que ça débloque | Sans elle |
+|---|---|---|
+| `AMAZON_BR_TAG` & co. | **La commission.** C'est le revenu. | Le site marche, le trafic part gratuitement |
+| `ADMIN_PASSWORD` | `/admin` : taux de clic, top suggestions | Panneau fermé |
+| `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | La **mesure** (sessions, clics, votes partagés) | Le produit marche, on ne mesure rien |
+
+Avec Supabase, applique les migrations de `supabase/migrations/` dans l'ordre.
+
+## En local
 
 ```bash
 npm install
 npm run dev        # http://localhost:3000
 ```
 
-Sans variables d'environnement, l'app tourne quand même : le store bascule en
-mémoire et le moteur sert un catalogue de secours. Pour le vrai comportement :
-
-```bash
-cp .env.example .env.local   # puis remplir
-```
-
-puis appliquer les migrations de `supabase/migrations/` dans l'ordre (SQL editor
-Supabase, ou `supabase db push`).
-
 Commandes : `npm run build`, `npm run lint`, `npm run typecheck`, `npm test`.
-
-## Le parcours
-
-| Écran | Route | Contenu |
-|---|---|---|
-| 1 | `/` | Quem vai ganhar o presente ? — 12 relations, un tap = écran suivant |
-| 2 | `/` | Idade + o que curte — chips d'âge, champ libre, 20 chips d'intérêt |
-| 3 | `/` | Qual é a ocasião ? — 7 occasions, un tap = écran suivant |
-| 4 | `/` | Prazo + orçamento — le tap sur le budget déclenche l'envoi |
-| → | `/resultado/[requestId]` | 3 cartes, vote du groupe, refinar, partage WhatsApp |
-| → | `/go/[suggestionId]` | Enregistre le clic, redirige 302 vers l'URL affiliée |
-| → | `/admin` | Taux de clic, sessions, marketplaces, top suggestions |
-
-Sept taps et une phrase du début à la fin.
 
 ## Le moteur — un algorithme, pas un modèle payant
 
@@ -110,6 +111,19 @@ Deux choses que ce fichier fait et qui comptent :
    `/go/[suggestionId]`, qui enregistre le clic puis redirige en 302. Le tag
    n'est pas lisible dans le code source, et changer de programme
    d'affiliation ne demande pas de re-rendre une seule carte.
+
+### Photos et fiches produit
+
+Les cartes montrent une **illustration de la catégorie** du cadeau, pas une
+photo de produit : auto-hébergée, zéro requête, zéro licence, jamais d'image
+cassée. C'est honnête — nos entrées sont des catégories, pas des références.
+
+Afficher la vraie photo d'un produit précis suppose le flux produit d'un
+marchand. `src/lib/products.ts` est la couche prête à recevoir ça ; elle renvoie
+`null` tant qu'aucun identifiant n'est configuré, et les cartes retombent sur
+l'illustration. Le plus accessible est **Mercado Livre** (compte développeur
+gratuit) ; Amazon PA-API exige trois ventes qualifiantes avant de donner
+l'accès, ce n'est donc pas une option au démarrage.
 
 ### Aller jusqu'au produit exact
 

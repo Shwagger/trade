@@ -50,8 +50,8 @@ export default function Home() {
         }),
       });
       if (!res.ok) throw new Error("request failed");
-      const { requestId } = (await res.json()) as { requestId: string };
-      router.push(`/resultado/${requestId}`);
+      const { token } = (await res.json()) as { token: string };
+      router.push(`/resultado/${token}`);
     } catch {
       setSubmitting(false);
       setError("Não deu para enviar agora. Toque de novo em alguns segundos.");

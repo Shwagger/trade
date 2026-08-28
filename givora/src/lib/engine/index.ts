@@ -97,6 +97,7 @@ export function recommend(input: EngineInput): SuggestionDraft[] {
     price_range: priceRange(s.archetype, input.budgetMin, input.budgetMax),
     marketplace: s.archetype.store,
     position: i + 1,
+    glyph: s.archetype.glyph,
   }));
 }
 

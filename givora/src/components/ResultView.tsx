@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { SuggestionCard } from "./SuggestionCard";
 import { SuggestionSkeleton } from "./SuggestionSkeleton";
@@ -13,6 +14,7 @@ const WAIT_MESSAGES = [
 ];
 
 export function ResultView({
+  token,
   requestId,
   headline,
   quote,
@@ -20,6 +22,8 @@ export function ResultView({
   initialSuggestions,
   initialTallies,
 }: {
+  /** Le jeton porte la demande : il sert à reconstruire les liens /go. */
+  token: string;
   requestId: string;
   headline: string;
   /** Les mots exacts de l'utilisateur. On les lui rend pour prouver qu'on a lu. */
@@ -28,51 +32,48 @@ export function ResultView({
   initialSuggestions: Suggestion[];
   initialTallies: VoteTally[];
 }) {
-  const [suggestions, setSuggestions] = useState(initialSuggestions);
+  // Les cartes viennent du serveur, calculées depuis le jeton : il n'y a
+  // plus rien à charger à l'ouverture. `loading` ne sert qu'au temps de
+  // la navigation vers un résultat affiné.
+  const suggestions = initialSuggestions;
   const [tallies, setTallies] = useState(initialTallies);
-  const [loading, setLoading] = useState(initialSuggestions.length === 0);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [messageIndex, setMessageIndex] = useState(0);
   const [refineOpen, setRefineOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
 
-  const started = useRef(false);
+  const router = useRouter();
 
-  const generate = useCallback(
-    async (withFeedback?: string) => {
+  // Le « refinar » ne recalcule rien ici : il demande un nouveau JETON et
+  // navigue dessus. Le résultat affiné est donc lui aussi une URL
+  // partageable, identique pour tous ceux qui l'ouvriront.
+  const refine = useCallback(
+    async (withFeedback: string) => {
       setLoading(true);
       setError(null);
       setMessageIndex(0);
       try {
-        const res = await fetch("/api/recommend", {
+        const res = await fetch("/api/refine", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ requestId, feedback: withFeedback }),
+          body: JSON.stringify({ token, feedback: withFeedback }),
         });
-        const data = (await res.json()) as { suggestions?: Suggestion[]; error?: string };
-        if (!res.ok || !data.suggestions) {
-          throw new Error(data.error ?? "falha");
-        }
-        setSuggestions(data.suggestions);
-        setTallies([]); // nouveau trio, les votes de l'ancien ne veulent plus rien dire
-        setRefineOpen(false);
-        setFeedback("");
+        const data = (await res.json()) as { token?: string; error?: string };
+        if (!res.ok || !data.token) throw new Error(data.error ?? "falha");
+        router.push(`/resultado/${data.token}`);
       } catch (err) {
-        setError(err instanceof Error && err.message !== "falha"
-          ? err.message
-          : "Não conseguimos gerar as ideias agora. Toque para tentar de novo.");
-      } finally {
         setLoading(false);
+        setError(
+          err instanceof Error && err.message !== "falha"
+            ? err.message
+            : "Não conseguimos gerar outras ideias agora. Toque para tentar de novo.",
+        );
       }
     },
-    [requestId],
+    [token, router],
   );
 
-  useEffect(() => {
-    if (started.current || initialSuggestions.length > 0) return;
-    started.current = true;
-    void generate();
-  }, [generate, initialSuggestions.length]);
 
   // Le message d'attente change toutes les 1,8 s : l'utilisateur voit que
   // quelque chose bouge même si la réponse prend 6 secondes.
@@ -185,7 +186,7 @@ export function ResultView({
             <p className="text-base text-ink/70" role="alert">
               {error}
             </p>
-            <button type="button" className="primary-btn mt-4" onClick={() => generate()}>
+            <button type="button" className="primary-btn mt-4" onClick={() => setError(null)}>
               Tentar de novo
             </button>
           </div>
@@ -195,6 +196,7 @@ export function ResultView({
               key={s.id}
               suggestion={s}
               tally={talliesById.get(s.id)}
+              href={`/go/${token}/${s.position}`}
               onVote={vote}
             />
           ))
@@ -226,7 +228,7 @@ export function ResultView({
                 type="button"
                 className="primary-btn mt-3"
                 disabled={feedback.trim().length < 3}
-                onClick={() => generate(feedback.trim())}
+                onClick={() => void refine(feedback.trim())}
               >
                 Gerar outras três
               </button>

@@ -177,6 +177,14 @@ check("chaque search_query fait 2 à 5 mots", () => {
     assert.ok(n >= 2 && n <= 5, `${a.id} : "${a.query}" (${n} mots)`);
   }
 });
+check("chaque cadeau a son propre pictogramme", () => {
+  // Le pictogramme de la CATÉGORIE est trop large : dans « gourmet », un
+  // kit de cafés affichait un fromage. Chaque article porte le sien.
+  for (const a of CATALOG) {
+    assert.ok(a.glyph, `${a.id} n'a pas de glyph`);
+    assert.ok([...a.glyph].length <= 3, `${a.id} : glyph trop long`);
+  }
+});
 check("floor < typical partout", () => {
   for (const a of CATALOG) assert.ok(a.floor < a.typical, `${a.id}: ${a.floor} >= ${a.typical}`);
 });

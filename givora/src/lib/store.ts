@@ -86,6 +86,8 @@ export async function createRecipient(input: {
 // --- requests --------------------------------------------------------
 
 export async function createRequest(input: {
+  /** Id dérivé du jeton : le même lien partagé = la même ligne. */
+  id?: string;
   recipientId: string | null;
   occasion: string;
   budgetMin: number;
@@ -94,7 +96,7 @@ export async function createRequest(input: {
   deadlineDays: number | null;
 }): Promise<GiftRequest> {
   const row: GiftRequest = {
-    id: randomUUID(),
+    id: input.id ?? randomUUID(),
     recipient_id: input.recipientId,
     occasion: input.occasion,
     budget_min: input.budgetMin,
@@ -111,9 +113,12 @@ export async function createRequest(input: {
     return row;
   }
 
+  // upsert : deux personnes qui ouvrent le même lien partagé ne créent
+  // pas deux demandes, elles touchent la même ligne.
   const { data, error } = await db
     .from("requests")
-    .insert({
+    .upsert({
+      id: row.id,
       recipient_id: row.recipient_id,
       occasion: row.occasion,
       budget_min: row.budget_min,

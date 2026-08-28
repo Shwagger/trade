@@ -13,6 +13,13 @@ const config = [
     rules: { "import/no-anonymous-default-export": "off" },
   },
   {
+    // Un paramètre préfixé d'un underscore est délibérément inutilisé :
+    // c'est la signature d'une fonction dont l'implémentation viendra.
+    rules: {
+      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+    },
+  },
+  {
     files: ["tests/**/*.cjs"],
     rules: { "@typescript-eslint/no-require-imports": "off" },
   },

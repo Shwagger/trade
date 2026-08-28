@@ -13,6 +13,8 @@ export type Suggestion = {
   price_range: string;
   marketplace: Marketplace;
   position: number;
+  /** Pictogramme de la carte. Voir src/lib/visuals.ts. */
+  glyph?: string;
 };
 
 export type GiftRequest = {
