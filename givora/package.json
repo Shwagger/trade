@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --no-warnings tests/schema.test.mjs"
+    "test": "tsc -p tsconfig.test.json && node tests/engine.test.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",

@@ -1,11 +1,18 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { SuggestionDraft } from "../store";
+import type { EngineInput as AlgorithmInput } from "../engine";
 import { buildUserPrompt, SYSTEM_PROMPT } from "./prompt";
 import { checkRules, RecommendationSchema, withinBudget, type ModelSuggestion } from "./schema";
 
 // =====================================================================
-// Moteur de recommandation — appel Anthropic.
+// Moteur de recommandation — appel Anthropic. OPTIONNEL et ÉTEINT par
+// défaut (voir isAiEngineEnabled). Le moteur du produit est
+// src/lib/engine : gratuit, instantané, reproductible.
+//
+// On garde ce chemin parce qu'il est écrit et testé : le jour où le
+// volume justifie de payer pour des justifications rédigées sur mesure,
+// c'est une variable d'environnement à poser.
 //
 // Sortie structurée : `messages.parse` + `zodOutputFormat` contraignent
 // le modèle au schéma côté serveur d'Anthropic, donc on ne parse pas du
@@ -14,18 +21,10 @@ import { checkRules, RecommendationSchema, withinBudget, type ModelSuggestion } 
 // différentes, budget, pas de langue de pub).
 // =====================================================================
 
-export type EngineInput = {
-  relation: string;
-  ageRange: string | null;
-  interests: string[];
-  freeText: string | null;
-  occasion: string;
-  budgetMin: number;
-  budgetMax: number | null;
-  deadlineDays: number | null;
-  feedback?: string | null;
-  avoidTitles?: string[];
-};
+// Même entrée que l'algorithme, moins la graine : les deux moteurs sont
+// interchangeables, c'est ce qui rend la bascule possible sans rien
+// toucher d'autre.
+export type EngineInput = Omit<AlgorithmInput, "seed" | "rejectedTitles">;
 
 export class EngineError extends Error {
   constructor(
@@ -38,8 +37,15 @@ export class EngineError extends Error {
   }
 }
 
-export function isEngineConfigured(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY);
+/**
+ * Le moteur IA est DÉSACTIVÉ par défaut : il coûte de l'argent à chaque
+ * demande, et l'algorithme (src/lib/engine) fait le travail gratuitement.
+ * Il faut deux choses pour l'allumer — la clé ET le drapeau — pour qu'une
+ * clé présente dans l'environnement pour une autre raison ne déclenche
+ * jamais une facture par surprise.
+ */
+export function isAiEngineEnabled(): boolean {
+  return process.env.USE_AI_ENGINE === "1" && Boolean(process.env.ANTHROPIC_API_KEY);
 }
 
 // Le modèle est fixé ici et nulle part ailleurs.

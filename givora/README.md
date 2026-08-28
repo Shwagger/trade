@@ -42,28 +42,56 @@ Commandes : `npm run build`, `npm run lint`, `npm run typecheck`, `npm test`.
 
 Sept taps et une phrase du début à la fin.
 
-## Le moteur (phase 2)
+## Le moteur — un algorithme, pas un modèle payant
 
-`/api/recommend` appelle Anthropic via `messages.parse` + `zodOutputFormat` : la
-sortie est contrainte au schéma côté serveur, on ne parse pas du JSON à la main
-dans du texte.
+`src/lib/engine/` calcule les trois idées **en local, en quelques
+millisecondes, sans appel réseau**. Conséquences directes :
 
-Le schéma garantit la forme, pas le produit. `src/lib/recommend/schema.ts`
-revalide ce qui compte vraiment :
+- **coût par session : zéro.** La commission d'affiliation est une marge de
+  100 %, et la facture ne bouge pas quand le trafic monte ;
+- **réponse instantanée**, donc le parcours tient vraiment sous 30 secondes ;
+- **reproductible à graine fixée** : quand une suggestion est mauvaise, on
+  rejoue exactement le cas et on lit le détail du calcul (`explain()`) ;
+- **rien ne peut inventer** un produit qui n'existe pas.
 
-- trois catégories **différentes** ;
-- `reason` en **une seule phrase**, qui cite un détail donné par l'utilisateur ;
-- pas de langue de pub (« presente perfeito », « vai amar »… sont rejetés) ;
-- `search_query` de 2 à 5 mots ;
-- le prix affiché tient dans le budget.
+Quatre pièces :
 
-Si une règle saute, on relance **une fois** en disant au modèle ce qui a été
-rejeté — relancer à l'identique ne corrige rien. Après ça on sert quand même :
-trois idées imparfaites valent mieux qu'une page d'erreur.
+| Fichier | Rôle |
+|---|---|
+| `catalog.ts` | ~85 **archétypes** de cadeau. C'est l'actif du produit. |
+| `lexicon.ts` | Traduit le portugais réel (« corre no parque », « tá sempre com o cachorro ») en signaux. |
+| `score.ts` | Somme pondérée lisible + sélection des 3. |
+| `reasons.ts` | La phrase « por que combina ». |
 
-Rate limit par IP, timeout 20 s, erreurs du SDK traduites en PT-BR.
-Sans `ANTHROPIC_API_KEY`, le catalogue de secours prend le relais et la réponse
-dit quel moteur a répondu (`engine: "ia" | "catalogo"`).
+**Des archétypes, pas des produits.** Chaque entrée porte une requête
+marketplace qui ramène des dizaines de produits réels : jamais de lien mort,
+jamais de rupture de stock, rien à re-synchroniser quand un vendeur disparaît.
+
+**Le scoring** additionne intérêts (poids le plus fort), affinité de relation,
+tranche d'âge, occasion, ajustement au budget et prazo, moins les pénalités
+(déjà vu, descendu par le groupe, hors sujet). Un bruit déterministe dérivé de
+la graine évite que deux profils identiques voient exactement la même chose.
+Trois filtres sont **durs** : hors budget, âge inadapté, occasion inadaptée —
+ces articles ne s'affichent jamais.
+
+**Les règles produit sont garanties par construction**, pas par une consigne
+polie : trois catégories différentes, une seule phrase, et la justification ne
+peut citer qu'un signal réellement extrait du texte de l'utilisateur. Sans
+signal, elle le dit (« Sem muita pista, essa é a aposta de baixo risco »)
+au lieu d'inventer un détail.
+
+`npm test` : 25 tests, dont **800 combinaisons** relation × âge × occasion ×
+budget qui doivent toutes rendre 3 idées de 3 catégories, dans le budget.
+
+### L'IA reste possible, éteinte, et payante
+
+`src/lib/recommend/anthropic.ts` existe et fonctionne (sortie structurée,
+validation Zod, une relance, rate limit). Il faut **`USE_AI_ENGINE=1` ET une
+clé** pour l'allumer — une clé seule ne déclenche jamais de facture. Si l'IA
+échoue ou dépasse le délai, l'algorithme reprend la main immédiatement et
+l'utilisateur ne voit rien. À rallumer le jour où le volume justifie de payer
+pour des justifications rédigées sur mesure ; d'ici là, c'est de l'argent
+dépensé pour un gain que le catalogue peut donner gratuitement.
 
 ## L'affiliation (phase 3)
 
@@ -139,8 +167,10 @@ tests/schema.test.mjs               règles produit du moteur
   sa mémoire. Ça arrête un script naïf, pas un attaquant. Un compteur partagé
   (Postgres ou Upstash) quand le trafic le justifiera — seule l'implémentation
   de `hit()` change.
-- **Le catalogue de secours** (`recommend/stub.ts`) est du dépannage, pas un
-  produit : 12 articles en dur. Il ne sert que sans clé API ou si le moteur
-  tombe.
+- **Le catalogue est un actif éditorial, jamais « fini ».** Sur les profils
+  très spécifiques dans la tranche « R$ 300 ou mais », il arrive qu'un seul
+  archétype porte le bon signal : les deux autres cartes retombent alors sur
+  des valeurs sûres et le disent honnêtement. La correction est d'ajouter des
+  archétypes, pas de toucher au scoring.
 - **Les formats d'affiliation Mercado Livre et Shopee sont à confirmer** dans
   les panneaux respectifs (voir les commentaires du fichier).

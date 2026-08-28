@@ -7,12 +7,12 @@ import {
   replaceSuggestions,
 } from "@/lib/store";
 import { clientIp, hit } from "@/lib/rate-limit";
+import { recommend } from "@/lib/engine";
 import {
   EngineError,
   generateWithAnthropic,
-  isEngineConfigured,
+  isAiEngineEnabled,
 } from "@/lib/recommend/anthropic";
-import { stubSuggestions } from "@/lib/recommend/stub";
 
 // POST /api/recommend  { requestId, feedback? }
 //
@@ -77,30 +77,28 @@ export async function POST(req: Request) {
   };
 
   let drafts;
-  let engine: "ia" | "catalogo" = "ia";
+  let engine: "algoritmo" | "ia" = "algoritmo";
 
-  if (isEngineConfigured()) {
+  // Par défaut : l'algorithme. Zéro appel réseau, zéro coût par session,
+  // réponse en quelques millisecondes. La commission est une marge de
+  // 100 %, et la facture ne bouge pas quand le trafic monte.
+  //
+  // L'IA n'est là que si on l'active explicitement (USE_AI_ENGINE=1 +
+  // clé). Elle coûte de l'argent à chaque demande : c'est un choix à
+  // faire les yeux ouverts, pas un défaut.
+  if (isAiEngineEnabled()) {
     try {
       drafts = await generateWithAnthropic(input);
+      engine = "ia";
     } catch (err) {
-      console.error("[api/recommend] moteur:", err);
-      const userMessage =
-        err instanceof EngineError ? err.userMessage : "O motor de sugestões falhou.";
-      return NextResponse.json({ error: userMessage }, { status: 502 });
+      // L'IA tombe ou dépasse le délai : l'algorithme prend la main tout
+      // de suite. L'utilisateur ne voit jamais d'erreur pour ça.
+      console.error("[api/recommend] IA en échec, bascule sur l'algorithme:", err);
+      if (!(err instanceof EngineError)) console.error(err);
+      drafts = recommend({ ...input, seed: requestId });
     }
   } else {
-    // Pas de clé : on ne casse pas le parcours, on le sert avec le
-    // catalogue. Visible dans la réponse pour ne tromper personne.
-    console.warn("[api/recommend] ANTHROPIC_API_KEY absente — catalogue de secours");
-    engine = "catalogo";
-    drafts = stubSuggestions({
-      occasion: input.occasion,
-      interests: input.interests,
-      freeText: [input.freeText, feedback].filter(Boolean).join(" — "),
-      budgetMin: input.budgetMin,
-      budgetMax: input.budgetMax,
-      avoidTitles: input.avoidTitles,
-    });
+    drafts = recommend({ ...input, seed: requestId });
   }
 
   try {
