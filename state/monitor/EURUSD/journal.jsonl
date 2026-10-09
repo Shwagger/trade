@@ -72,3 +72,5 @@
 {"ts": "2026-10-06T16:43:08+00:00", "kind": "cancelled", "bar": "2026-10-06 13:00:00+00:00", "reason": "cooldown after losing streak"}
 {"ts": "2026-10-06T16:43:08+00:00", "kind": "signal", "bar": "2026-10-06 13:00:00+00:00", "action": "SELL", "confidence": 0.3714, "lift": 1.113, "score": -0.1664, "approved": false, "expected_fill": "2026-10-06 14:00:00+00:00", "lots": 0.0, "entry": null, "stop_loss": null, "take_profit": null, "detail": "will fill at the next bar open"}
 {"ts": "2026-10-06T16:43:08+00:00", "kind": "cancelled", "bar": "2026-10-06 14:00:00+00:00", "reason": "cooldown after losing streak"}
+{"ts": "2026-10-09T20:49:06+00:00", "kind": "signal", "bar": "2026-10-09 12:00:00+00:00", "action": "SELL", "confidence": 0.3831, "lift": 1.148, "score": -0.1575, "approved": true, "expected_fill": "2026-10-09 13:00:00+00:00", "lots": 0.26, "entry": 1.12007, "stop_loss": 1.1217, "take_profit": 1.11681, "detail": "will fill at the next bar open"}
+{"ts": "2026-10-09T20:49:07+00:00", "kind": "fill", "bar": "2026-10-09 13:00:00+00:00", "direction": -1, "lots": 0.26, "entry": 1.12013, "stop_loss": 1.12176, "take_profit": 1.11687, "risk": 47.85}
