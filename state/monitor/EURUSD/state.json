@@ -1,29 +1,16 @@
 {
   "symbol": "EURUSD",
-  "equity": 9637.915323603536,
+  "equity": 9592.410050792352,
   "peak_equity": 10000.0,
-  "last_bar": "2026-10-12 00:00:00+00:00",
+  "last_bar": "2026-10-12 07:00:00+00:00",
   "last_trained_bar": "2026-09-21 20:00:00+00:00",
-  "bars_since_train": 332,
-  "position": {
-    "direction": -1,
-    "lots": 0.26,
-    "entry": 1.1201271769332886,
-    "stop_loss": 1.1217573797337188,
-    "take_profit": 1.116866771332428,
-    "entry_time": "2026-10-09 13:00:00+00:00",
-    "risk_amount": 47.84527281118686,
-    "bars_held": 10,
-    "score": -0.1575401649008371,
-    "confidence": 0.3830717458418431,
-    "initial_risk": 0.001630202800430264,
-    "atr_at_entry": 0.0010868018669535093
-  },
+  "bars_since_train": 339,
+  "position": null,
   "pending": null,
   "risk": {
     "day_start_equity": 9637.915323603536,
     "current_day": "2026-10-12",
-    "consecutive_losses": 0,
+    "consecutive_losses": 1,
     "cooldown_left": 0,
     "halted": false,
     "halt_reason": ""
@@ -148,6 +135,21 @@
       "cost": 3.52,
       "cost_r": 0.0764,
       "equity_after": 9637.92
+    },
+    {
+      "entry_time": "2026-10-09 13:00:00+00:00",
+      "exit_time": "2026-10-12 01:00:00+00:00",
+      "direction": -1,
+      "lots": 0.26,
+      "entry": 1.12013,
+      "exit": 1.12178,
+      "pnl": -45.51,
+      "r_multiple": -0.9511,
+      "exit_reason": "stop",
+      "bars_held": 10,
+      "cost": 6.24,
+      "cost_r": 0.1304,
+      "equity_after": 9592.41
     }
   ],
   "started_at": "2026-08-21T05:25:26.270044+00:00"
